@@ -39,7 +39,7 @@ class GithubUtil:
         # Obtain installation access token.
         url = "https://api.github.com/app/installations/{}/access_tokens"
         r = self.http_request("POST", url.format(GITHUB_APP_INSTALL_ID), headers)
-        return r['token']
+        return r.json()['token']
 
     # --------------------------------------------------------------------------
     def now(self):
