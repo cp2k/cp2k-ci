@@ -62,7 +62,7 @@ class GithubUtil:
         if r.status_code >= 400:
             print(r.text)
         r.raise_for_status()
-        return r.json()
+        return r
 
     # --------------------------------------------------------------------------
     def authenticated_http_request(self, method, url, body=None):
@@ -75,18 +75,26 @@ class GithubUtil:
         # we get occasional 401 errors https://github.com/cp2k/cp2k-ci/issues/45
         for i in range(5):  # retry a few times
             try:
-                return self.authenticated_http_request("GET", url)
+                return self.authenticated_http_request("GET", url).json()
             except:
                 print("Sleeping a bit before retrying...")
                 sleep(2)
-        return self.authenticated_http_request("GET", url)  # final attempt
+        return self.authenticated_http_request("GET", url).json()  # final attempt
+
+    # --------------------------------------------------------------------------
+    def iterate(self, url):
+        r = self.authenticated_http_request("GET", url)
+        yield from r.json()
+        while "next" in r.links:
+            r = self.authenticated_http_request("GET", r.links["next"]["url"])
+            yield from r.json()
 
     # --------------------------------------------------------------------------
     def post(self, url, body):
-        return self.authenticated_http_request("POST", url, body)
+        return self.authenticated_http_request("POST", url, body).json()
 
-    # --------------------------------------------------------------------------
+    # ------------------- -------------------------------------------------------
     def patch(self, url, body):
-        return self.authenticated_http_request("PATCH", url, body)
+        return self.authenticated_http_request("PATCH", url, body).json()
 
 # EOF

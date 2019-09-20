@@ -290,8 +290,8 @@ def submit_check_run(target, gh, pr, sender, optional=False):
     # check if any related files were modified
     if config.has_option(target, "related_path"):
         related_path_re = re.compile(config.get(target, "related_path"))
-        modified_files = [e['filename'] for e in gh.get(pr['url'] + '/files')]
-        if not any([related_path_re.search(fn) for fn in modified_files]):
+        modified_files = [e['filename'] for e in gh.iterate(pr['url'] + '/files')]
+        if not any(related_path_re.search(fn) for fn in modified_files):
             summary = "No related files were changed - skipping."
             check_run["output"] = {"title":summary, "summary": ""}
             check_run["completed_at"] = gh.now()
