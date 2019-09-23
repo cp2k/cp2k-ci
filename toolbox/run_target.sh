@@ -64,7 +64,7 @@ function docker_pull_or_build {
         echo "image not found." >> "${REPORT}"
         echo -e "\\n#################### Building Image ${this_target} ####################" | tee -a "${REPORT}"
         echo -e "Dockerfile: ${this_dockerfile}" |& tee -a "${REPORT}"
-        echo -e "Build-Args: ${build_args_str}\n" |& tee -a "${REPORT}"
+        echo -e "Build-Args: ${build_args_str}\\n" |& tee -a "${REPORT}"
         docker image pull "${cache_ref}" || docker image pull "${image_name}:master"
         if ! docker build \
                --cache-from "${cache_ref}" \
@@ -72,6 +72,13 @@ function docker_pull_or_build {
                --tag "${image_ref}" \
                --file ".${this_dockerfile}" \
                "${build_args_flags[@]}" "${build_context}" |& tee -a "${REPORT}" ; then
+          # Build failed, salvage last succesful step.
+          last_layer=$(docker images --quiet | head -n 1)
+          docker tag "${last_layer}" "${cache_ref}"
+          echo -en "\\nPushing image of last succesful step ${last_layer} ... " | tee -a "${REPORT}"
+          docker image push "${cache_ref}"
+          echo "done." >> "${REPORT}"
+          # Write error report and quit.
           echo -e "\\nSummary: Docker build had non-zero exit status.\\nStatus: FAILED" | tee -a "${REPORT}"
           upload_final_report
           exit 0  # Prevent crash looping.
@@ -97,7 +104,7 @@ echo "StartDate: ${START_DATE}" | tee -a "${REPORT}"
 CPUID=$(cpuid -1 | grep "(synth)" | cut -c14-)
 NUM_CPUS=$(cpuid | grep -c "(synth)")
 echo "CpuId: ${NUM_CPUS}x ${CPUID}" | tee -a "${REPORT}"
-if which nvidia-smi &>/dev/null ; then
+if command -v nvidia-smi &>/dev/null ; then
     GPUID=$(nvidia-smi --query-gpu=gpu_name --format=csv | tail -n 1)
     NUM_GPUS=$(nvidia-smi --query-gpu=gpu_name --format=csv,noheader | wc -l)
     echo "GpuId: ${NUM_GPUS}x ${GPUID}" | tee -a "${REPORT}"
