@@ -65,28 +65,32 @@ class GithubUtil:
         return r
 
     # --------------------------------------------------------------------------
-    def authenticated_http_request(self, method, url, body=None):
+    def authenticated_http_request(self, method, url, body=None, retries=0):
         headers = {"Authorization": "token " + self.token,
                    "Accept": "application/vnd.github.antiope-preview+json"}
-        return self.http_request(method, url, headers, body)
-
-    # --------------------------------------------------------------------------
-    def get(self, url):
         # we get occasional 401 errors https://github.com/cp2k/cp2k-ci/issues/45
-        for i in range(5):  # retry a few times
+        for i in range(retries):
             try:
-                return self.authenticated_http_request("GET", url).json()
+                return self.http_request(method, url, headers, body)
             except:
                 print("Sleeping a bit before retrying...")
                 sleep(2)
-        return self.authenticated_http_request("GET", url).json()  # final attempt
+        return self.http_request(method, url, headers, body)  # final attempt
+
+    # --------------------------------------------------------------------------
+    def get(self, url):
+        r = self.authenticated_http_request("GET", url, retries=5)
+        if "next" in r.links:
+            print("Warning: Found unexpected next link at: " + url)
+        return r.json()
 
     # --------------------------------------------------------------------------
     def iterate(self, url):
-        r = self.authenticated_http_request("GET", url)
+        r = self.authenticated_http_request("GET", url, retries=5)
         yield from r.json()
         while "next" in r.links:
-            r = self.authenticated_http_request("GET", r.links["next"]["url"])
+            url = r.links["next"]["url"]
+            r = self.authenticated_http_request("GET", url, retries=5)
             yield from r.json()
 
     # --------------------------------------------------------------------------

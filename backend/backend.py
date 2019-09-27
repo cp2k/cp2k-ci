@@ -209,7 +209,7 @@ def process_pull_request(gh, pr_number, sender):
         print("Ignoring PR for non-master branch: " + pr['base']['ref'])
         return
 
-    commits = gh.get(pr['commits_url'])
+    commits = list(gh.iterate(pr['commits_url']))
 
     # Find previous check run conclusions, before we call cancel on them.
     prev_check_runs = []
@@ -387,7 +387,7 @@ def poll_pull_requests(job_list):
     all_repos = set([config.get(t, "repository") for t in config.sections()])
     for repo in all_repos:
         gh = GithubUtil(repo)
-        for pr in gh.get("/pulls"):
+        for pr in gh.iterate("/pulls"):
             if pr['base']['ref'] != 'master':
                 continue  # ignore non-master PR
             head_sha = pr['head']['sha']
