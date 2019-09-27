@@ -21,6 +21,7 @@ gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${FRONT
 #TODO roles/storage.objectAdmin should be enough, but it's missing the storage.buckets.get permission.
 gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/storage.admin"              # for singing upload urls
 gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/pubsub.subscriber"          # for receiving messages from frontend
+gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/pubsub.viewer"              # for receiving messages from frontend
 
 # runner
 #TODO roles/storage.objectAdmin should be enough
