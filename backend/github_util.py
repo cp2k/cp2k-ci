@@ -21,7 +21,7 @@ class GithubUtil:
     # --------------------------------------------------------------------------
     def get_master_head_sha(self):
         # Get sha of latest git commit.
-        return self.get("/commits")[0]['sha']
+        return self.iterate("/commits").next()['sha']
 
     # --------------------------------------------------------------------------
     def get_installation_token(self):
