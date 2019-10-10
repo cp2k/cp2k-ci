@@ -165,7 +165,7 @@ class KubernetesUtil:
         # job
         job_spec = self.api.V1JobSpec(template=pod_template,
                                       backoff_limit=6,
-                                      active_deadline_seconds=7200)  # 2 hours
+                                      active_deadline_seconds=10800)  # 3 hours
         job = self.api.V1Job(spec=job_spec, metadata=job_metadata)
         self.batch_api.create_namespaced_job(self.namespace, body=job)
 
