@@ -51,7 +51,7 @@ function docker_pull_or_build {
     local build_context="."$(dirname "${this_dockerfile}")
     local git_tree_sha=$(git ls-tree -d  HEAD "${build_context}" | awk '{print $3}')
     local build_args_hash=$(echo "${build_args_flags[@]}" | md5sum | awk '{print $1}')
-    local arch_hash=$(echo "${CPUID} ${GPUID}" | md5sum | awk '{print $1}')
+    local arch_hash=$(echo "${CPUID}" | md5sum | awk '{print $1}')
     local image_name="gcr.io/${PROJECT}/img_${this_target}-arch-${arch_hash::3}"
     local image_tag="gittree-${git_tree_sha::7}-buildargs-${build_args_hash::7}"
     local image_ref="${image_name}:${image_tag}"
