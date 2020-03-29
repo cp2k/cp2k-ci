@@ -55,7 +55,7 @@ for GPUS in 1 2 4 8 ; do
 done
 
 # There is no n1-highcpu-24 machine type.
-# Using custom type with same 0.9GB/vCPU ratio routed up to multiple of 256MiB.
+# Using custom type with same 0.9GB/vCPU ratio rounded up to multiple of 256MiB.
 gcloud container node-pools create pool-tesla-p4-haswell-24 \
        --cluster="${CLUSTER_NAME}" \
        --machine-type="custom-24-22272" \
@@ -66,6 +66,20 @@ gcloud container node-pools create pool-tesla-p4-haswell-24 \
        --enable-autorepair \
        --enable-autoscaling \
        --max-nodes=2 \
+       --min-nodes=0 \
+       --num-nodes=0 \
+       --node-taints="costly=true:NoSchedule"
+
+gcloud container node-pools create pool-tesla-p100-haswell-16 \
+       --cluster="${CLUSTER_NAME}" \
+       --machine-type="n1-highcpu-16" \
+       --accelerator="type=nvidia-tesla-p100,count=1" \
+       --min-cpu-platform="Intel Haswell" \
+       --preemptible \
+       --enable-autoupgrade \
+       --enable-autorepair \
+       --enable-autoscaling \
+       --max-nodes=1 \
        --min-nodes=0 \
        --num-nodes=0 \
        --node-taints="costly=true:NoSchedule"
