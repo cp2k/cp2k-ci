@@ -67,6 +67,7 @@ function docker_pull_or_build {
         echo -e "Build-Args: ${build_args_str}\\n" |& tee -a "${REPORT}"
         docker image pull "${cache_ref}" || docker image pull "${image_name}:master"
         if ! docker build \
+               --memory "${MEMORY_LIMIT}" \
                --cache-from "${cache_ref}" \
                --cache-from "${image_name}:master" \
                --tag "${image_ref}" \
@@ -104,6 +105,7 @@ echo "StartDate: ${START_DATE}" | tee -a "${REPORT}"
 CPUID=$(cpuid -1 | grep "(synth)" | cut -c14-)
 NUM_CPUS=$(cpuid | grep -c "(synth)")
 echo "CpuId: ${NUM_CPUS}x ${CPUID}" | tee -a "${REPORT}"
+MEMORY_LIMIT="$((NUM_CPUS * 820))m"  # ... ought to be enough for anybody.
 if command -v nvidia-smi &>/dev/null ; then
     GPUID=$(nvidia-smi --query-gpu=gpu_name --format=csv | tail -n 1)
     NUM_GPUS=$(nvidia-smi --query-gpu=gpu_name --format=csv,noheader | wc -l)
@@ -144,6 +146,7 @@ echo -e "\\n#################### Running Image ${TARGET} ####################" |
 ARTIFACTS_DIR="/tmp/artifacts"
 mkdir "${ARTIFACTS_DIR}"
 if ! docker run --init --cap-add=SYS_PTRACE \
+       --memory "${MEMORY_LIMIT}" \
        --env "GIT_BRANCH=${GIT_BRANCH}" \
        --env "GIT_REF=${GIT_REF}" \
        --volume "${ARTIFACTS_DIR}:/workspace/artifacts" \
@@ -152,7 +155,7 @@ if ! docker run --init --cap-add=SYS_PTRACE \
 fi
 
 # Upload artifacts.
-if [ ! -z "$(ls -A ${ARTIFACTS_DIR})" ]; then
+if [ -n "$(ls -A ${ARTIFACTS_DIR})" ]; then
     echo -en "\\nUploading artifacts... " | tee -a "${REPORT}"
     ARTIFACTS_TGZ="/tmp/artifacts.tgz"
     cd "${ARTIFACTS_DIR}" || exit
