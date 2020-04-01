@@ -67,7 +67,7 @@ function docker_pull_or_build {
         echo -e "Build-Args: ${build_args_str}\\n" |& tee -a "${REPORT}"
         docker image pull "${cache_ref}" || docker image pull "${image_name}:master"
         if ! docker build \
-               --memory "${MEMORY_LIMIT}" \
+               --memory "${MEMORY_LIMIT_MB}m" \
                --cache-from "${cache_ref}" \
                --cache-from "${image_name}:master" \
                --tag "${image_ref}" \
@@ -105,11 +105,12 @@ echo "StartDate: ${START_DATE}" | tee -a "${REPORT}"
 CPUID=$(cpuid -1 | grep "(synth)" | cut -c14-)
 NUM_CPUS=$(cpuid | grep -c "(synth)")
 echo "CpuId: ${NUM_CPUS}x ${CPUID}" | tee -a "${REPORT}"
-MEMORY_LIMIT="$((NUM_CPUS * 700))m"  # ... ought to be enough for anybody.
+MEMORY_LIMIT_MB="$((NUM_CPUS * 700))"  # ... ought to be enough for anybody.
 if command -v nvidia-smi &>/dev/null ; then
     GPUID=$(nvidia-smi --query-gpu=gpu_name --format=csv | tail -n 1)
     NUM_GPUS=$(nvidia-smi --query-gpu=gpu_name --format=csv,noheader | wc -l)
     echo "GpuId: ${NUM_GPUS}x ${GPUID}" | tee -a "${REPORT}"
+    MEMORY_LIMIT_MB="$((MEMORY_LIMIT_MB * 4))"  # use a bit more for GPU runs
 fi
 
 # Upload preliminary report every 30s in the background.
@@ -146,7 +147,7 @@ echo -e "\\n#################### Running Image ${TARGET} ####################" |
 ARTIFACTS_DIR="/tmp/artifacts"
 mkdir "${ARTIFACTS_DIR}"
 if ! docker run --init --cap-add=SYS_PTRACE \
-       --memory "${MEMORY_LIMIT}" \
+       --memory "${MEMORY_LIMIT_MB}m" \
        --env "GIT_BRANCH=${GIT_BRANCH}" \
        --env "GIT_REF=${GIT_REF}" \
        --volume "${ARTIFACTS_DIR}:/workspace/artifacts" \
