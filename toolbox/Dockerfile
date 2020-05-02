@@ -1,12 +1,14 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 # author: Ole Schuett
 
 USER root
 WORKDIR /tmp
 
+
 # install ubuntu packages
-RUN apt-get update -qq && apt-get install -qq --no-install-recommends \
+RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true && \
+    apt-get update -qq && apt-get install -qq --no-install-recommends \
     ca-certificates \
     wget \
     less \
@@ -34,7 +36,7 @@ RUN wget -q https://www.cp2k.org/static/downloads/cpuid-20180519.x86_64.tar.gz &
 
 # install docker
 RUN wget -qO- docker.gpg https://download.docker.com/linux/ubuntu/gpg | apt-key add - && \
-    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" && \
+    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable" && \
     apt-get update  -qq && \
     apt-get install -qq docker-ce && \
     rm -rf /var/lib/apt/lists/*
@@ -66,7 +68,7 @@ RUN wget -qO- https://nvidia.github.io/nvidia-docker/gpgkey | apt-key add - && \
 
 # install gcloud
 RUN wget -qO- https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
-    add-apt-repository "deb http://packages.cloud.google.com/apt cloud-sdk-$(lsb_release -cs) main"  && \
+    add-apt-repository "deb http://packages.cloud.google.com/apt cloud-sdk-bionic main"  && \
     apt-get update -qq && \
     apt-get install -qq google-cloud-sdk && \
     rm -rf /var/lib/apt/lists/*
