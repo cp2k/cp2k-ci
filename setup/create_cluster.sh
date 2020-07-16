@@ -17,6 +17,7 @@ gcloud container clusters create $CLUSTER_NAME \
    --disk-size=20 \
    --num-nodes=1 \
    --preemptible \
+   --autoscaling-profile optimize-utilization \
    --enable-autorepair \
    --enable-autoupgrade \
    --maintenance-window 3:00
