@@ -16,12 +16,13 @@ steps:
 - name: 'gcr.io/cloud-builders/docker'
   args: ["push", "gcr.io/$PROJECT_ID/img_cp2kci_frontend:latest"]
 
-- name: 'gcr.io/cloud-builders/gcloud'
+- name: "gcr.io/cloud-builders/gcloud"
   args:
-  - compute
-  - instances
-  - reset
-  - cp2kci-frontend
-  - --zone=us-central1-c
+   - "run"
+   - "deploy"
+   - "cp2kci-frontend"
+   - "--platform=managed"
+   - "--region=us-central1"
+   - "--image=gcr.io/$PROJECT_ID/img_cp2kci_frontend:$SHORT_SHA"
 
 #EOF

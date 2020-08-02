@@ -20,8 +20,10 @@ app.logger.setLevel(logging.INFO)
 project = google.auth.default()[1]
 pubsub_topic =  'projects/' + project + '/topics/cp2kci-topic'
 
+app.logger.info('CP2K-CI frontend is up and running :-)')
+
 #===================================================================================================
-@app.route('/healthz')
+@app.route('/health')
 def healthz():
     #TODO: find a way to return queue size or some other end-to-end health metric.
     message_backend(rpc="update_healthz_beacon")

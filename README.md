@@ -78,9 +78,7 @@ Additionally, the container can make files available to the user by writting the
 The CP2K-CI system consists of three components. Each resides in its own sub directory and gets automatically deployed as a container by [Cloud Build](https://cloud.google.com/cloud-build/).
 
 ### Frontend
-- Runs on a stand-alone [f1-micro](https://cloud.google.com/compute/docs/machine-types#sharedcore) instance, which is [free](https://cloud.google.com/free/) on GCP.
-- Runs an [Apache](https://httpd.apache.org/) https server using a certificate from [Let’s Encrypt](https://letsencrypt.org).
-- Has a static IP and is reachable at https://ci.cp2k.org.
+- Hosted on [Cloud Run](https://cloud.google.com/run/docs), reachable at https://ci.cp2k.org.
 - Runs a simple [Flask](http://flask.pocoo.org/) application for receiving events from Github via [webhooks](https://developer.github.com/webhooks/).
 - After validating their [signature](https://developer.github.com/webhooks/securing/) the Github events are placed into a [Pub/Sub](https://cloud.google.com/pubsub/) message queue.
 

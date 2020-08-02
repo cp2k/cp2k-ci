@@ -7,25 +7,27 @@ if [ -z "${GITHUB_WEBHOOK_SECRET}" ]; then
     exit 1
 fi
 
-DISK_NAME="cp2kci-letsencrypt"
 PROJECT=$(gcloud config list --format 'value(core.project)')
 FRONTEND_ACCOUNT_NAME="cp2kci-frontend"
 FRONTEND_ACCOUNT="${FRONTEND_ACCOUNT_NAME}@${PROJECT}.iam.gserviceaccount.com"
 
 set -x
 
-#gcloud compute disks create ${DISK_NAME} --size="1GB"
-
-gcloud compute instances create \
-   "cp2kci-frontend" \
-   --machine-type="f1-micro" \
-   --image-project="cos-cloud" \
-   --image-family="cos-stable" \
-   --address="35.222.79.114" \
-   --disk="name=${DISK_NAME}" \
-   --tags="http-server,https-server" \
+gcloud run deploy "cp2kci-frontend" \
+   --cpu=1 \
+   --memory=128M \
+   --max-instances=3 \
+   --platform="managed" \
+   --region="us-central1" \
+   --allow-unauthenticated \
    --service-account="${FRONTEND_ACCOUNT}" \
-   --metadata-from-file="startup-script=../frontend/startup-script.sh" \
-   --metadata="GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET},LETSENCRYPT_STAGING=${LETSENCRYPT_STAGING}"
+   --image="gcr.io/cp2k-org-project/img_cp2kci_frontend2" \
+   --update-env-vars="GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}"
+
+gcloud beta run domain-mappings create \
+   --platform="managed" \
+   --region="us-central1" \
+   --service="cp2kci-frontend" \
+   --domain="ci.cp2k.org"
 
 #EOF

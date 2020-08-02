@@ -1,5 +1,6 @@
 flask
 bcrypt
 google-cloud-pubsub
+gunicorn
 
 #EOF
