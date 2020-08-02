@@ -32,7 +32,7 @@ gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${CRONJ
 gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${CRONJOB_ACCOUNT}" --role="roles/storage.admin"              # for removing old images
 
 # cloud builder
-gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${CLOUDBUILD_ACCOUNT}" --role="roles/compute.instanceAdmin"   # for updating frontend container
+gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${CLOUDBUILD_ACCOUNT}" --role="roles/run.admin"               # for updating frontend container
 gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${CLOUDBUILD_ACCOUNT}" --role="roles/container.developer"     # for updating backend container
 gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${CLOUDBUILD_ACCOUNT}" --role="roles/iam.serviceAccountUser"  # somehow required too
 
