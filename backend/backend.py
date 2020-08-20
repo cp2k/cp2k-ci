@@ -506,7 +506,7 @@ def parse_report(report_blob):
         report_txt = report_blob.download_as_string().decode("utf8")
 
         report['summary'] = 'Error while parsing report.'
-        report['summary'] = re.findall("(^|\n)Summary: (.+)\n", report_txt)[-1][1]
+        report['summary'] = re.findall("(^|[\n\r])Summary: (.+)\n", report_txt)[-1][1]
         report['status'] = re.findall("(^|\n)Status: (.+)\n", report_txt)[-1][1]
         report['git-sha'] = re.search("(^|\n)CommitSHA: (\w{40})\n", report_txt).group(2)
     except:
