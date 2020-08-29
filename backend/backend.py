@@ -365,7 +365,8 @@ def submit_dashboard_test(target, head_sha, force=False):
     report_fn = "dashboard_"+test_name+"_report.txt"
     blob = output_bucket.get_blob(report_fn)
     if blob:
-        report_txt = blob.download_as_string(end=1024).decode("utf8")
+        # We only download the first 1024 bytes which might break a unicode character.
+        report_txt = blob.download_as_string(end=1024).decode("utf8", errors="replace")
         m = re.search("(^|\n)CommitSHA: (\w{40})\n", report_txt)
         if m:
             latest_report_sha = m.group(2)
