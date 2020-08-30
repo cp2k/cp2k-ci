@@ -10,7 +10,7 @@ gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
 echo "Looking for old images..."
 
 for IMAGE in $(gcloud container images list --format="get(name)"); do
-    if [[ $IMAGE == *"img_cp2kci_"* ]]; then
+    if [[ $IMAGE == *"img_cp2kci_"* || $IMAGE == *"img_cp2kprecommit"* ]]; then
         # For system images we only keep current production version.
         FILTER="-tags:(latest)"
     elif [[ $IMAGE == *"img_cp2k-toolchain"* ]]; then
