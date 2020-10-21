@@ -132,7 +132,11 @@ PROJECT=${PROJECT:-"cp2k-org-project"}
 # Update git repo which contains the Dockerfiles.
 cd "/workspace/${GIT_REPO}" || exit
 git fetch origin "${GIT_BRANCH}"
-git -c advice.detachedHead=false checkout "${GIT_REF}"
+if ! git -c advice.detachedHead=false checkout "${GIT_REF}" ; then
+    echo -e "\\nSummary: Git checkout of ${GIT_REF::7} failed.\\nStatus: FAILED" | tee -a "${REPORT}"
+    upload_final_report
+    exit 0  # Prevent crash looping.
+fi
 git --no-pager log -1 --pretty='%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: %an%nCommitSubject: %s%n' |& tee -a "${REPORT}"
 
 # Pull or build docker containers.
