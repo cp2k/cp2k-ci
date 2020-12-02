@@ -100,6 +100,7 @@ class KubernetesUtil:
         env_vars["GIT_REPO"] = self.config.get(target, "repository")
         env_vars["DOCKERFILE"] = self.config.get(target, "dockerfile")
         env_vars["BUILD_ARGS"] = self.config.get(target, "build_args", fallback="")
+        env_vars["NUM_GPUS_REQUIRED"] = self.config.getint(target, "gpu", fallback=0)
         env_vars["REPORT_UPLOAD_URL"] = self.get_upload_url(report_path)
         env_vars["ARTIFACTS_UPLOAD_URL"] = \
             self.get_upload_url(artifacts_path, content_type="application/gzip")

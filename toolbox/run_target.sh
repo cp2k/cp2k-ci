@@ -106,11 +106,16 @@ CPUID=$(cpuid -1 | grep "(synth)" | cut -c14-)
 NUM_CPUS=$(cpuid | grep -c "(synth)")
 echo "CpuId: ${NUM_CPUS}x ${CPUID}" | tee -a "${REPORT}"
 MEMORY_LIMIT_MB="$((NUM_CPUS * 700))"  # ... ought to be enough for anybody.
-if command -v nvidia-smi &>/dev/null ; then
+if (( NUM_GPUS_REQUIRED > 0 )) ; then
     GPUID=$(nvidia-smi --query-gpu=gpu_name --format=csv | tail -n 1)
     NUM_GPUS=$(nvidia-smi --query-gpu=gpu_name --format=csv,noheader | wc -l)
     echo "GpuId: ${NUM_GPUS}x ${GPUID}" | tee -a "${REPORT}"
     MEMORY_LIMIT_MB="$((MEMORY_LIMIT_MB * 4))"  # use a bit more for GPU runs
+    if (( NUM_GPUS < NUM_GPUS_REQUIRED )) ; then
+        echo -e "\\nNot enough GPUs found. Restarting..." | tee -a "${REPORT}"
+        upload_final_report
+        exit 1  # trigger retry
+    fi
 fi
 
 # Upload preliminary report every 30s in the background.
