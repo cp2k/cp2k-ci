@@ -114,6 +114,7 @@ if (( NUM_GPUS_REQUIRED > 0 )) ; then
     if (( NUM_GPUS < NUM_GPUS_REQUIRED )) ; then
         echo -e "\\nNot enough GPUs found. Restarting..." | tee -a "${REPORT}"
         upload_final_report
+        sleep 30
         exit 1  # trigger retry
     fi
 fi
@@ -138,9 +139,10 @@ PROJECT=${PROJECT:-"cp2k-org-project"}
 cd "/workspace/${GIT_REPO}" || exit
 git fetch origin "${GIT_BRANCH}"
 if ! git -c advice.detachedHead=false checkout "${GIT_REF}" ; then
-    echo -e "\\nSummary: Git checkout of ${GIT_REF::7} failed.\\nStatus: FAILED" | tee -a "${REPORT}"
+    echo -e "\\nGit checkout of ${GIT_REF::7} failed. Restarting..." | tee -a "${REPORT}"
     upload_final_report
-    exit 0  # Prevent crash looping.
+    sleep 30
+    exit 1  # trigger retry
 fi
 git --no-pager log -1 --pretty='%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: %an%nCommitSubject: %s%n' |& tee -a "${REPORT}"
 
