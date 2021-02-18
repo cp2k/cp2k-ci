@@ -152,7 +152,7 @@ class KubernetesUtil:
         # pod
         tolerate_costly = self.api.V1Toleration(key="costly", operator="Exists")
         pod_spec = self.api.V1PodSpec(containers=[container],
-                                      volumes=[docker_volume, secret_volume],
+                                      volumes=[shm_volume, docker_volume, secret_volume],
                                       tolerations=[tolerate_costly],
                                       termination_grace_period_seconds=0,
                                       restart_policy="OnFailure",  # https://github.com/kubernetes/kubernetes/issues/79398
