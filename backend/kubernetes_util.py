@@ -114,12 +114,6 @@ class KubernetesUtil:
             env_vars["PARENT_DOCKERFILE"] = self.config.get(parent, "dockerfile")
             env_vars["PARENT_BUILD_ARGS"] = self.config.get(parent, "build_args", fallback="")
 
-        # shared memory volume (needed for MPI)
-        shm_volname = "volume-shm-" + job_name
-        shm_volsrc = self.api.V1EmptyDirVolumeSource(medium="Memory")
-        shm_volume = self.api.V1Volume(name=shm_volname, empty_dir=shm_volsrc)
-        shm_mount = self.api.V1VolumeMount(name=shm_volname, mount_path="/dev/shm")
-
         # docker volume (needed for performance)
         docker_volname = "volume-docker-" + job_name
         docker_volsrc = self.api.V1EmptyDirVolumeSource()
@@ -143,16 +137,14 @@ class KubernetesUtil:
                                          image=toolbox_image,
                                          resources=self.resources(target),
                                          command=["./run_target.sh"],
-                                         volume_mounts=[shm_mount,
-                                                        docker_mount,
-                                                        secret_mount],
+                                         volume_mounts=[docker_mount, secret_mount],
                                          security_context=privileged,
                                          env=k8s_env_vars)
 
         # pod
         tolerate_costly = self.api.V1Toleration(key="costly", operator="Exists")
         pod_spec = self.api.V1PodSpec(containers=[container],
-                                      volumes=[shm_volume, docker_volume, secret_volume],
+                                      volumes=[docker_volume, secret_volume],
                                       tolerations=[tolerate_costly],
                                       termination_grace_period_seconds=0,
                                       restart_policy="OnFailure",  # https://github.com/kubernetes/kubernetes/issues/79398
