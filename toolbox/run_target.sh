@@ -157,7 +157,7 @@ docker_pull_or_build "${TARGET}" "${DOCKERFILE}" "${BUILD_ARGS}"
 echo -e "\\n#################### Running Image ${TARGET} ####################" | tee -a "${REPORT}"
 ARTIFACTS_DIR="/tmp/artifacts"
 mkdir "${ARTIFACTS_DIR}"
-if ! docker run --init --cap-add=SYS_PTRACE \
+if ! docker run --init --cap-add=SYS_PTRACE --shm-size=1g \
        --memory "${MEMORY_LIMIT_MB}m" \
        --env "GIT_BRANCH=${GIT_BRANCH}" \
        --env "GIT_REF=${GIT_REF}" \
