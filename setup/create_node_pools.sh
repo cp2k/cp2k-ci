@@ -22,7 +22,9 @@ for CPUS in 8 16 32 ; do
        --min-nodes=0 \
        --num-nodes=0 \
        --node-taints="costly=true:NoSchedule"
+done
 
+for CPUS in 8 16 32 64 ; do
     gcloud beta container node-pools create pool-highcpu-${CPUS}-skylake \
         --cluster="${CLUSTER_NAME}" \
         --machine-type="n1-highcpu-${CPUS}" \
