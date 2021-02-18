@@ -114,20 +114,23 @@ class KubernetesUtil:
             env_vars["PARENT_DOCKERFILE"] = self.config.get(parent, "dockerfile")
             env_vars["PARENT_BUILD_ARGS"] = self.config.get(parent, "build_args", fallback="")
 
+        # shared memory volume (needed for MPI)
+        shm_volname = "volume-shm-" + job_name
+        shm_volsrc = self.api.V1EmptyDirVolumeSource(medium="Memory")
+        shm_volume = self.api.V1Volume(name=shm_volname, empty_dir=shm_volsrc)
+        shm_mount = self.api.V1VolumeMount(name=shm_volname, mount_path="/dev/shm")
 
         # docker volume (needed for performance)
-        docker_source = self.api.V1EmptyDirVolumeSource()
-        docker_volname = "volume-" + job_name
-        docker_volume = self.api.V1Volume(name=docker_volname,
-                                          empty_dir=docker_source)
-        docker_mount = self.api.V1VolumeMount(mount_path="/var/lib/docker/",
-                                              name=docker_volname)
+        docker_volname = "volume-docker-" + job_name
+        docker_volsrc = self.api.V1EmptyDirVolumeSource()
+        docker_volume = self.api.V1Volume(name=docker_volname, empty_dir=docker_volsrc)
+        docker_mount = self.api.V1VolumeMount(name=docker_volname, mount_path="/var/lib/docker")
 
-        # secret stuff
-        secret_source = self.api.V1SecretVolumeSource(secret_name="runner-gcp-key")
-        secret_volume = self.api.V1Volume(name="runner-gcp-key-volume",
-                                          secret=secret_source)
-        secret_mount = self.api.V1VolumeMount(name="runner-gcp-key-volume",
+        # secret volume
+        secret_volname = "runner-gcp-key-volume"
+        secret_volsrc = self.api.V1SecretVolumeSource(secret_name="runner-gcp-key")
+        secret_volume = self.api.V1Volume(name=secret_volname, secret=secret_volsrc)
+        secret_mount = self.api.V1VolumeMount(name=secret_volname,
                                               mount_path="/var/secrets/google",
                                               read_only=True)
         env_vars["GOOGLE_APPLICATION_CREDENTIALS"] = "/var/secrets/google/key.json"
@@ -140,7 +143,8 @@ class KubernetesUtil:
                                          image=toolbox_image,
                                          resources=self.resources(target),
                                          command=["./run_target.sh"],
-                                         volume_mounts=[docker_mount,
+                                         volume_mounts=[shm_mount,
+                                                        docker_mount,
                                                         secret_mount],
                                          security_context=privileged,
                                          env=k8s_env_vars)
