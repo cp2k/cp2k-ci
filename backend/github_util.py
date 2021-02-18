@@ -33,7 +33,7 @@ class GithubUtil:
         app_token = jwt.encode(payload, GITHUB_APP_KEY, algorithm="RS256")
         # Setup header for app.
         headers = {
-            "Authorization": "Bearer ".encode("utf8") + app_token,
+            "Authorization": "Bearer " + app_token,
             "Accept": "application/vnd.github.machine-man-preview+json",
         }
         # Obtain installation access token.
