@@ -54,4 +54,20 @@ gcloud container node-pools create pool-tesla-p100-skylake-16 \
        --num-nodes=0 \
        --node-taints="costly=true:NoSchedule"
 
+# There is no n1-standard-12 machine type.
+# Using custom type with same 3.75GB/vCPU ratio.
+gcloud container node-pools create pool-v100-skylake-12 \
+       --cluster="${CLUSTER_NAME}" \
+       --machine-type="custom-12-46080" \
+       --accelerator="type=nvidia-tesla-v100,count=1" \
+       --min-cpu-platform="Intel Skylake" \
+       --preemptible \
+       --enable-autoupgrade \
+       --enable-autorepair \
+       --enable-autoscaling \
+       --max-nodes=1 \
+       --min-nodes=0 \
+       --num-nodes=0 \
+       --node-taints="costly=true:NoSchedule"
+
 #EOF
