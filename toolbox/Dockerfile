@@ -9,6 +9,7 @@ WORKDIR /tmp
 RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true && \
     apt-get update -qq && apt-get install -qq --no-install-recommends \
     ca-certificates \
+    cpuid \
     wget \
     less \
     nano \
@@ -26,31 +27,24 @@ RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true && \
 COPY requirements.txt .
 RUN pip3 install -r requirements.txt
 
-# install latest cpuid tool
-# The Ubuntu version does not recognize the GCP Skylake CPUs.
-RUN wget -q https://www.cp2k.org/static/downloads/cpuid-20180519.x86_64.tar.gz && \
-    echo "76b8f7334068c894152ef04bbb0b3ce8  cpuid-20180519.x86_64.tar.gz" | md5sum --check && \
-    tar -xzf cpuid-20180519.x86_64.tar.gz && \
-    cp ./cpuid-20180519/cpuid /usr/bin/
-
 # install docker
-RUN wget -qO- docker.gpg https://download.docker.com/linux/ubuntu/gpg | apt-key add - && \
-    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable" && \
+RUN apt-key adv --fetch-keys https://download.docker.com/linux/ubuntu/gpg && \
+    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable" && \
     apt-get update  -qq && \
     apt-get install -qq docker-ce && \
     rm -rf /var/lib/apt/lists/*
 
 # install nvidia-docker
 # https://github.com/NVIDIA/nvidia-docker
-RUN wget -qO- https://nvidia.github.io/nvidia-docker/gpgkey | apt-key add - && \
+RUN apt-key adv --fetch-keys https://nvidia.github.io/nvidia-docker/gpgkey && \
     wget -qO- https://nvidia.github.io/nvidia-docker/ubuntu$(lsb_release -rs)/nvidia-docker.list | tee /etc/apt/sources.list.d/nvidia-docker.list && \
     apt-get update -qq && \
     apt-get install -qq nvidia-docker2 && \
     rm -rf /var/lib/apt/lists/*
 
 # install gcloud
-RUN wget -qO- https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
-    add-apt-repository "deb http://packages.cloud.google.com/apt cloud-sdk-bionic main"  && \
+RUN apt-key adv --fetch-keys https://packages.cloud.google.com/apt/doc/apt-key.gpg && \
+    add-apt-repository "deb http://packages.cloud.google.com/apt cloud-sdk main" && \
     apt-get update -qq && \
     apt-get install -qq google-cloud-sdk && \
     rm -rf /var/lib/apt/lists/*
