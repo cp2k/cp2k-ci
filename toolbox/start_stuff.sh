@@ -14,7 +14,7 @@ if which nvidia-persistenced &> /dev/null ; then
   nvidia-persistenced
 fi
 
-/usr/bin/dockerd --default-runtime=nvidia -H unix:// &> /var/log/dockerd.log &
+/usr/bin/dockerd --storage-opt dm.basesize=20G --default-runtime=nvidia -H unix:// &> /var/log/dockerd.log &
 sleep 1  # wait a bit for docker deamon
 
 if ! docker version ; then
