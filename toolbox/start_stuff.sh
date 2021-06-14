@@ -14,19 +14,16 @@ if which nvidia-persistenced &> /dev/null ; then
   nvidia-persistenced
 fi
 
-# Using dm.basesize=20G to allow for very large images.
-# https://docs.docker.com/engine/reference/commandline/dockerd/#options-per-storage-driver
-# Use `docker system df` to check storage usage.
-/usr/bin/dockerd --storage-opt overlay2.size=20G --default-runtime=nvidia -H unix:// & #&> /var/log/dockerd.log &
+/usr/bin/dockerd --default-runtime=nvidia -H unix:// &
 sleep 1  # wait a bit for docker deamon
-
-docker info
 
 if ! docker version ; then
     cat /var/log/docker.log
     echo "Docker does not work, not running with --privileged?"
     exit 1
 fi
+
+docker info
 
 #https://issuetracker.google.com/issues/38098801
 gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
