@@ -17,8 +17,10 @@ fi
 # Using dm.basesize=20G to allow for very large images.
 # https://docs.docker.com/engine/reference/commandline/dockerd/#options-per-storage-driver
 # Use `docker system df` to check storage usage.
-/usr/bin/dockerd --storage-opt overlay2.size=20G --default-runtime=nvidia -H unix:// &> /var/log/dockerd.log &
+/usr/bin/dockerd --storage-opt overlay2.size=20G --default-runtime=nvidia -H unix:// & #&> /var/log/dockerd.log &
 sleep 1  # wait a bit for docker deamon
+
+docker info
 
 if ! docker version ; then
     cat /var/log/docker.log
