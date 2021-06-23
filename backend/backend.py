@@ -174,12 +174,12 @@ def await_mergeability(gh, pr, check_run_name, check_run_external_id):
 
     for i in range(10):
         if pr['mergeable'] is not None and not pr['mergeable']:
-            return # not mergable
+            return # not mergeable
         elif pr['mergeable'] is not None and pr['mergeable']:
             # Check freshness of merge branch.
             merge_commit = gh.get("/commits/{}".format(pr['merge_commit_sha']))
             if any(p['sha'] == pr['head']['sha'] for p in merge_commit['parents']):
-                return # mergable
+                return # mergeable
 
         # This might take a while, tell the user and disable resubmit buttons.
         if i==0:
