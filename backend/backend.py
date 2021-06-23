@@ -171,27 +171,33 @@ def process_github_event(event, body):
 def await_mergeability(gh, pr, check_run_name, check_run_external_id):
     # https://developer.github.com/v3/git/#checking-mergeability-of-pull-requests
 
-    if pr['mergeable'] is not None:
-        return
 
-    # This might take a while, tell the user and disable resubmit buttons.
-    check_run = {
-        "name": check_run_name,
-        "external_id": check_run_external_id,
-        "head_sha": pr['head']['sha'],
-        "started_at": gh.now(),
-        "output": {"title": "Waiting for mergeability check", "summary": ""}
-    }
-    gh.post("/check-runs", check_run)
-
-    pr_number = pr['number']
     for i in range(10):
+        if pr['mergeable'] is not None and not pr['mergeable']:
+            return # not mergable
+        elif pr['mergeable'] is not None and pr['mergeable']:
+            # Check freshness of merge branch.
+            merge_commit = gh.get("/commits/{}".format(pr['merge_commit_sha']))
+            if any(p['sha'] == pr['head']['sha'] for p in merge_commit['parents']):
+                return # mergable
+
+        # This might take a while, tell the user and disable resubmit buttons.
+        if i==0:
+            check_run = {
+                "name": check_run_name,
+                "external_id": check_run_external_id,
+                "head_sha": pr['head']['sha'],
+                "started_at": gh.now(),
+                "output": {"title": "Waiting for mergeability check", "summary": ""}
+            }
+            gh.post("/check-runs", check_run)
+
+        # Reload pull request.
+        pr_number = pr['number']
         print("Waiting for mergeability check of PR {}".format(pr_number))
         sleep(5)
         pr.clear()
         pr.update(gh.get("/pulls/{}".format(pr_number)))
-        if pr['mergeable'] is not None:
-            return
 
     # timeout
     check_run['completed_at']: gh.now()
