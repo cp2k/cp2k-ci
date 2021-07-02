@@ -104,8 +104,8 @@ class KubernetesUtil:
 
         is_remote = self.config.has_option(target, "remote_host")
         if is_remote:
-            env_vars["REMOTE_HOST"] = self.config.get(parent, "remote_host")
-            env_vars["REMOTE_CMD"] = self.config.get(parent, "remote_cmd")
+            env_vars["REMOTE_HOST"] = self.config.get(target, "remote_host")
+            env_vars["REMOTE_CMD"] = self.config.get(target, "remote_cmd")
         else:
             env_vars["DOCKERFILE"] = self.config.get(target, "dockerfile")
             env_vars["BUILD_ARGS"] = self.config.get(target, "build_args", fallback="")
