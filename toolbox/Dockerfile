@@ -18,6 +18,7 @@ RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true && \
     apt-transport-https \
     ca-certificates \
     software-properties-common \
+    openssh-client \
     python3-pip \
     python3-wheel \
     python3-setuptools \
