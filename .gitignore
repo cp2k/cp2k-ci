@@ -1,6 +1,7 @@
 *.pem
 *.pyc
 key.json
+ssh_config
 *~
 __pycache__
 \#*\#
