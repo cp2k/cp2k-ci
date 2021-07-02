@@ -54,7 +54,7 @@ done
 
 echo -e "\\n#################### Running Remote Target ${TARGET} ####################" | tee -a "${REPORT}"
 
-ssh "${REMOTE_HOST}" "${REMOTE_CMD}" "${GIT_BRANCH}" "${GIT_REF}"
+ssh "${REMOTE_HOST}" "${REMOTE_CMD}" "${GIT_BRANCH}" "${GIT_REF}" |& tee -a "${REPORT}"
 
 upload_final_report
 
