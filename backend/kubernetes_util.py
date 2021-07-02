@@ -149,7 +149,7 @@ class KubernetesUtil:
         if is_remote:
             ssh_secret_volname = "ssh-config-volume"
             ssh_secret_volsrc = self.api.V1SecretVolumeSource(secret_name="ssh-config",
-                                                              default_mode=0600)
+                                                              default_mode=0o0600)
             volumes.append(self.api.V1Volume(name=ssh_secret_volname,
                                              secret=ssh_secret_volsrc))
             volume_mounts.append(self.api.V1VolumeMount(name=ssh_secret_volname,
