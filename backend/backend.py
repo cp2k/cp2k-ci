@@ -499,6 +499,7 @@ def publish_job_to_github(job):
     check_run['output']['summary'] = summary
 
     # update check_run
+    print(check_run)
     gh.patch(job_annotations['cp2kci-check-run-url'], check_run)
 
     # update job_annotations
