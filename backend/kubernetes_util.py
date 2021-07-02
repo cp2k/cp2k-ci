@@ -50,8 +50,8 @@ class KubernetesUtil:
 
     # --------------------------------------------------------------------------
     def resources(self, target):
-        cpu = self.config.getint(target, "cpu")
-        gpu = self.config.getint(target, "gpu", fallback=0)
+        cpu = self.config.getfloat(target, "cpu")
+        gpu = self.config.getfloat(target, "gpu", fallback=0)
         req_cpu = 0.95 * cpu   # Request 5% less to leave some for kubernetes.
         return self.api.V1ResourceRequirements(requests={"cpu": req_cpu},
                                                limits={"nvidia.com/gpu": gpu})
@@ -98,12 +98,19 @@ class KubernetesUtil:
         env_vars["GIT_BRANCH"] = git_branch
         env_vars["GIT_REF"] = git_ref
         env_vars["GIT_REPO"] = self.config.get(target, "repository")
-        env_vars["DOCKERFILE"] = self.config.get(target, "dockerfile")
-        env_vars["BUILD_ARGS"] = self.config.get(target, "build_args", fallback="")
-        env_vars["NUM_GPUS_REQUIRED"] = self.config.get(target, "gpu", fallback="0")
         env_vars["REPORT_UPLOAD_URL"] = self.get_upload_url(report_path)
         env_vars["ARTIFACTS_UPLOAD_URL"] = \
             self.get_upload_url(artifacts_path, content_type="application/gzip")
+
+        is_remote = self.config.has_option(target, "remote_host")
+        if is_remote:
+            env_vars["REMOTE_HOST"] = self.config.get(parent, "remote_host")
+            env_vars["REMOTE_CMD"] = self.config.get(parent, "remote_cmd")
+        else:
+            env_vars["DOCKERFILE"] = self.config.get(target, "dockerfile")
+            env_vars["BUILD_ARGS"] = self.config.get(target, "build_args", fallback="")
+            env_vars["NUM_GPUS_REQUIRED"] = self.config.get(target, "gpu", fallback="0")
+
 
         # optional parent target, ie. cp2k toolchain.
         if self.config.has_option(target, "parent"):
@@ -114,37 +121,57 @@ class KubernetesUtil:
             env_vars["PARENT_DOCKERFILE"] = self.config.get(parent, "dockerfile")
             env_vars["PARENT_BUILD_ARGS"] = self.config.get(parent, "build_args", fallback="")
 
-        # docker volume (needed for performance)
-        docker_volname = "volume-docker-" + job_name
-        docker_volsrc = self.api.V1EmptyDirVolumeSource()
-        docker_volume = self.api.V1Volume(name=docker_volname, empty_dir=docker_volsrc)
-        docker_mount = self.api.V1VolumeMount(name=docker_volname, mount_path="/var/lib/docker")
 
-        # secret volume
-        secret_volname = "runner-gcp-key-volume"
-        secret_volsrc = self.api.V1SecretVolumeSource(secret_name="runner-gcp-key")
-        secret_volume = self.api.V1Volume(name=secret_volname, secret=secret_volsrc)
-        secret_mount = self.api.V1VolumeMount(name=secret_volname,
-                                              mount_path="/var/secrets/google",
-                                              read_only=True)
+        # volumens
+        volumes = []
+        volume_mounts = []
+
+        # docker volume (needed for performance)
+        if not is_remote:
+            docker_volname = "volume-docker-" + job_name
+            docker_volsrc = self.api.V1EmptyDirVolumeSource()
+            volumes.append(self.api.V1Volume(name=docker_volname,
+                                             empty_dir=docker_volsrc))
+            volume_mounts.append(self.api.V1VolumeMount(name=docker_volname,
+                                                        mount_path="/var/lib/docker"))
+
+        # gcp secret volume
+        gcp_secret_volname = "runner-gcp-key-volume"
+        gcp_secret_volsrc = self.api.V1SecretVolumeSource(secret_name="runner-gcp-key")
+        volumes.append(self.api.V1Volume(name=gcp_secret_volname,
+                                         secret=gcp_secret_volsrc))
+        volume_mounts.append(self.api.V1VolumeMount(name=gcp_secret_volname,
+                                                    mount_path="/var/secrets/google",
+                                                    read_only=True))
         env_vars["GOOGLE_APPLICATION_CREDENTIALS"] = "/var/secrets/google/key.json"
+
+        # ssh secret volume
+        if is_remote:
+            ssh_secret_volname = "ssh-config-volume"
+            ssh_secret_volsrc = self.api.V1SecretVolumeSource(secret_name="ssh-config")
+            volumes.append(self.api.V1Volume(name=ssh_secret_volname,
+                                             secret=ssh_secret_volsrc))
+            volume_mounts.append(self.api.V1VolumeMount(name=ssh_secret_volname,
+                                                        mount_path="/root/.ssh",
+                                                        read_only=True))
 
         # container with privileged=True as needed by docker build
         privileged = self.api.V1SecurityContext(privileged=True)
         toolbox_image = self.image_base + "/img_cp2kci_toolbox:latest"
         k8s_env_vars = [self.api.V1EnvVar(k, v) for k, v in env_vars.items()]
+        command = "./run_remote_target.sh" if is_remote else "./run_target.sh"
         container = self.api.V1Container(name="main",
                                          image=toolbox_image,
                                          resources=self.resources(target),
-                                         command=["./run_target.sh"],
-                                         volume_mounts=[docker_mount, secret_mount],
+                                         command=[command],
+                                         volume_mounts=volume_mounts,
                                          security_context=privileged,
                                          env=k8s_env_vars)
 
         # pod
         tolerate_costly = self.api.V1Toleration(key="costly", operator="Exists")
         pod_spec = self.api.V1PodSpec(containers=[container],
-                                      volumes=[docker_volume, secret_volume],
+                                      volumes=volumes,
                                       tolerations=[tolerate_costly],
                                       termination_grace_period_seconds=0,
                                       restart_policy="OnFailure",  # https://github.com/kubernetes/kubernetes/issues/79398
