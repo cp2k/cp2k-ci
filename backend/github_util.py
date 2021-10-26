@@ -55,7 +55,7 @@ class GithubUtil:
     def http_request(self, method, url, headers, body=None):
         if url.startswith("/"):
             url = self.repo_url + url
-        r = requests.request(method=method, url=url, headers=headers, json=body)
+        r = requests.request(method=method, url=url, headers=headers, json=body, timeout=20)
         remaining = r.headers.get('X-RateLimit-Remaining', None)
         if remaining and int(remaining) < 100:
             print("X-RateLimit-Remaining: {}".format(remaining))

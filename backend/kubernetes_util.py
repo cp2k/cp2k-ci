@@ -10,6 +10,7 @@ class KubernetesUtil:
             kubernetes.config.load_kube_config()
         except Exception:
             kubernetes.config.load_incluster_config()
+        self.timeout = 3  # seconds
         self.config = config
         self.output_bucket = output_bucket
         self.image_base = image_base
@@ -28,19 +29,22 @@ class KubernetesUtil:
     # --------------------------------------------------------------------------
     def list_jobs(self, selector):
         return self.batch_api.list_namespaced_job(self.namespace,
-                                                  label_selector=selector)
+                                                  label_selector=selector,
+                                                  _request_timeout=self.timeout)
 
     # --------------------------------------------------------------------------
     def delete_job(self, job_name):
         print("deleting job: " + job_name)
         self.batch_api.delete_namespaced_job(job_name, self.namespace,
-                                             propagation_policy="Background")
+                                             propagation_policy="Background",
+                                             _request_timeout=self.timeout)
 
     # --------------------------------------------------------------------------
     def patch_job_annotations(self, job_name, new_annotations):
         new_job_metadata = self.api.V1ObjectMeta(annotations=new_annotations)
         new_job = self.api.V1Job(metadata=new_job_metadata)
-        self.batch_api.patch_namespaced_job(job_name, self.namespace, new_job)
+        self.batch_api.patch_namespaced_job(job_name, self.namespace, new_job,
+                                            _request_timeout=self.timeout)
 
         # also update annotations of report_blob
         report_blob = self.output_bucket.blob(new_annotations["cp2kci-report-path"])
@@ -192,6 +196,7 @@ class KubernetesUtil:
                                       backoff_limit=6,
                                       active_deadline_seconds=10800)  # 3 hours
         job = self.api.V1Job(spec=job_spec, metadata=job_metadata)
-        self.batch_api.create_namespaced_job(self.namespace, body=job)
+        self.batch_api.create_namespaced_job(self.namespace, body=job,
+                                             _request_timeout=self.timeout)
 
 # EOF
