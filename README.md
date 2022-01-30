@@ -30,6 +30,7 @@ tags:         required_check_run dashboard
 related_path: Makefile|src|tests|exts|tools/(build_utils|regtesting|toolchain|docker)
 parent:       cp2k-toolchain-mpich
 build_args:   TOOLCHAIN=__PARENT_IMAGE__
+build_path:   /tools/docker
 dockerfile:   /tools/docker/Dockerfile.test_sdbg
 ```
 
@@ -47,6 +48,7 @@ The fields have the following meaning. All lists are white-space separated.
 | tags         | Tags which determine when and how this target is build and run.                              |
 | related_path | Regular expression matching relevant files.                                                  |
 | build_args   | List of Docker build arguments. If parent is present `__PARENT_IMAGE__` gets substituted.    |
+| build_path   | Path to build context within given repository.                                               |
 | dockerfile   | Path to Dockerfile within given repository.                                                  |
 | parent       | Optional name of target that has to be build first, e.g. the toolchain.                      |
 

@@ -112,6 +112,7 @@ class KubernetesUtil:
             env_vars["REMOTE_CMD"] = self.config.get(target, "remote_cmd")
         else:
             env_vars["DOCKERFILE"] = self.config.get(target, "dockerfile")
+            env_vars["BUILD_PATH"] = self.config.get(target, "build_path")
             env_vars["BUILD_ARGS"] = self.config.get(target, "build_args", fallback="")
             env_vars["NUM_GPUS_REQUIRED"] = self.config.get(target, "gpu", fallback="0")
 
@@ -123,6 +124,7 @@ class KubernetesUtil:
             assert self.config.get(parent, "repository") == env_vars["GIT_REPO"]
             env_vars["PARENT_TARGET"] = parent
             env_vars["PARENT_DOCKERFILE"] = self.config.get(parent, "dockerfile")
+            env_vars["PARENT_BUILD_PATH"] = self.config.get(parent, "build_path")
             env_vars["PARENT_BUILD_ARGS"] = self.config.get(parent, "build_args", fallback="")
 
 

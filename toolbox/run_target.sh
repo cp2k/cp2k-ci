@@ -6,7 +6,7 @@
 set -o pipefail
 
 # Check input.
-for key in TARGET DOCKERFILE BUILD_ARGS NUM_GPUS_REQUIRED PARENT_TARGET PARENT_DOCKERFILE PARENT_BUILD_ARGS GIT_REPO GIT_BRANCH GIT_REF REPORT_UPLOAD_URL ARTIFACTS_UPLOAD_URL ; do
+for key in TARGET DOCKERFILE BUILD_ARGS BUILD_PATH NUM_GPUS_REQUIRED PARENT_TARGET PARENT_DOCKERFILE PARENT_BUILD_ARGS PARENT_BUILD_PATH GIT_REPO GIT_BRANCH GIT_REF REPORT_UPLOAD_URL ARTIFACTS_UPLOAD_URL ; do
     value="$(eval echo \$${key})"
     echo "${key}=\"${value}\""
 done
@@ -39,6 +39,7 @@ function docker_pull_or_build {
     local this_target=$1
     local this_dockerfile=$2
     local build_args_str=$3
+    local this_build_path=$4
 
     # Convert build_arg_str into array of flags suitable for docker build.
     local build_args_flags=()
@@ -48,8 +49,7 @@ function docker_pull_or_build {
     done
 
     # Compute cache key for docker image.
-    local build_context="."$(dirname "${this_dockerfile}")
-    local git_tree_sha=$(git ls-tree -d  HEAD "${build_context}" | awk '{print $3}')
+    local git_tree_sha=$(git ls-tree -d  HEAD ".${this_build_path}" | awk '{print $3}')
     local build_args_hash=$(echo "${build_args_flags[@]}" | md5sum | awk '{print $1}')
     local arch_hash=$(echo "${CPUID} " | md5sum | awk '{print $1}')
     local image_name="gcr.io/${PROJECT}/img_${this_target}-arch-${arch_hash::3}"
@@ -72,7 +72,7 @@ function docker_pull_or_build {
                --cache-from "${image_name}:master" \
                --tag "${image_ref}" \
                --file ".${this_dockerfile}" \
-               "${build_args_flags[@]}" "${build_context}" |& tee -a "${REPORT}" ; then
+               "${build_args_flags[@]}" ".${this_build_path}" |& tee -a "${REPORT}" ; then
           # Build failed, salvage last succesful step.
           last_layer=$(docker images --quiet | head -n 1)
           docker tag "${last_layer}" "${cache_ref}"
@@ -148,10 +148,10 @@ git --no-pager log -1 --pretty='%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: 
 
 # Pull or build docker containers.
 if [ "${PARENT_TARGET}" != "" ] ; then
-    docker_pull_or_build "${PARENT_TARGET}" "${PARENT_DOCKERFILE}" "${PARENT_BUILD_ARGS}"
+    docker_pull_or_build "${PARENT_TARGET}" "${PARENT_DOCKERFILE}" "${PARENT_BUILD_ARGS}" "${PARENT_BUILD_PATH}"
     BUILD_ARGS=${BUILD_ARGS//__PARENT_IMAGE__/${IMAGE_REF}}
 fi
-docker_pull_or_build "${TARGET}" "${DOCKERFILE}" "${BUILD_ARGS}"
+docker_pull_or_build "${TARGET}" "${DOCKERFILE}" "${BUILD_ARGS}" "${BUILD_PATH}"
 
 
 echo -e "\\n#################### Running Image ${TARGET} ####################" | tee -a "${REPORT}"
