@@ -49,7 +49,7 @@ function docker_pull_or_build {
     done
 
     # Compute cache key for docker image.
-    local git_tree_sha=$(git ls-tree -d  HEAD ".${this_build_path}" | awk '{print $3}')
+    local git_tree_sha=$(git log -n1 --format=%H ".${this_build_path}")
     local build_args_hash=$(echo "${build_args_flags[@]}" | md5sum | awk '{print $1}')
     local arch_hash=$(echo "${CPUID} " | md5sum | awk '{print $1}')
     local image_name="gcr.io/${PROJECT}/img_${this_target}-arch-${arch_hash::3}"
