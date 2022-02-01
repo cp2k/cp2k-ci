@@ -6,7 +6,7 @@
 set -o pipefail
 
 # Check input.
-for key in TARGET DOCKERFILE BUILD_ARGS BUILD_PATH NUM_GPUS_REQUIRED PARENT_TARGET PARENT_DOCKERFILE PARENT_BUILD_ARGS PARENT_BUILD_PATH GIT_REPO GIT_BRANCH GIT_REF REPORT_UPLOAD_URL ARTIFACTS_UPLOAD_URL ; do
+for key in TARGET DOCKERFILE BUILD_ARGS BUILD_PATH CACHE_FROM NUM_GPUS_REQUIRED PARENT_TARGET PARENT_DOCKERFILE PARENT_BUILD_ARGS PARENT_BUILD_PATH PARENT_CACHE_FROM GIT_REPO GIT_BRANCH GIT_REF REPORT_UPLOAD_URL ARTIFACTS_UPLOAD_URL ; do
     value="$(eval echo \$${key})"
     echo "${key}=\"${value}\""
 done
@@ -40,6 +40,7 @@ function docker_pull_or_build {
     local this_dockerfile=$2
     local build_args_str=$3
     local this_build_path=$4
+    local this_cache_from=$5
 
     # Convert build_arg_str into array of flags suitable for docker build.
     local build_args_flags=()
@@ -56,6 +57,7 @@ function docker_pull_or_build {
     local image_tag="gittree-${git_tree_sha::7}-buildargs-${build_args_hash::7}"
     local image_ref="${image_name}:${image_tag}"
     local cache_ref="${image_name}:${GIT_BRANCH//\//-}"
+    local ext_cache_ref="gcr.io/${PROJECT}/img_${this_cache_from}-arch-${arch_hash::3}:master"
 
     echo -en "Trying to pull image ${this_target}... " | tee -a "${REPORT}"
     if docker image pull "${image_ref}" ; then
@@ -67,10 +69,12 @@ function docker_pull_or_build {
         echo -e "Build-Path: ${this_build_path}" |& tee -a "${REPORT}"
         echo -e "Build-Args: ${build_args_str}\\n" |& tee -a "${REPORT}"
         docker image pull "${cache_ref}" || docker image pull "${image_name}:master"
+        [ "${this_cache_from}" != "" ] && docker image pull "${ext_cache_ref}"
         if ! docker build \
                --memory "${MEMORY_LIMIT_MB}m" \
                --cache-from "${cache_ref}" \
                --cache-from "${image_name}:master" \
+               --cache-from "${ext_cache_ref}" \
                --tag "${image_ref}" \
                --file ".${this_dockerfile}" \
                "${build_args_flags[@]}" ".${this_build_path}" |& tee -a "${REPORT}" ; then
@@ -149,10 +153,10 @@ git --no-pager log -1 --pretty='%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: 
 
 # Pull or build docker containers.
 if [ "${PARENT_TARGET}" != "" ] ; then
-    docker_pull_or_build "${PARENT_TARGET}" "${PARENT_DOCKERFILE}" "${PARENT_BUILD_ARGS}" "${PARENT_BUILD_PATH}"
+    docker_pull_or_build "${PARENT_TARGET}" "${PARENT_DOCKERFILE}" "${PARENT_BUILD_ARGS}" "${PARENT_BUILD_PATH}" "${PARENT_CACHE_FROM}"
     BUILD_ARGS=${BUILD_ARGS//__PARENT_IMAGE__/${IMAGE_REF}}
 fi
-docker_pull_or_build "${TARGET}" "${DOCKERFILE}" "${BUILD_ARGS}" "${BUILD_PATH}"
+docker_pull_or_build "${TARGET}" "${DOCKERFILE}" "${BUILD_ARGS}" "${BUILD_PATH}" "${CACHE_FROM}"
 
 
 echo -e "\\n#################### Running Image ${TARGET} ####################" | tee -a "${REPORT}"

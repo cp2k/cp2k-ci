@@ -51,6 +51,7 @@ The fields have the following meaning. All lists are white-space separated.
 | build_path   | Path to build context within given repository.                                               |
 | dockerfile   | Path to Dockerfile within given repository.                                                  |
 | parent       | Optional name of target that has to be build first, e.g. the toolchain.                      |
+| cache_from   | Optional name of target that should be used as additional cache source during the build.     |
 
 Tags determine when and how a target is build and run.
 
