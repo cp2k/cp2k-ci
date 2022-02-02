@@ -56,8 +56,9 @@ function docker_pull_or_build {
     local image_name="gcr.io/${PROJECT}/img_${this_target}-arch-${arch_hash::3}"
     local image_tag="gittree-${git_tree_sha::7}-buildargs-${build_args_hash::7}"
     local image_ref="${image_name}:${image_tag}"
+    local latest_ref="${image_name}:latest"
     local cache_ref="${image_name}:${GIT_BRANCH//\//-}"
-    local ext_cache_ref="gcr.io/${PROJECT}/img_${this_cache_from}-arch-${arch_hash::3}:master"
+    local ext_cache_ref="gcr.io/${PROJECT}/img_${this_cache_from}-arch-${arch_hash::3}:latest"
 
     echo -en "Trying to pull image ${this_target}... " | tee -a "${REPORT}"
     if docker image pull "${image_ref}" ; then
@@ -92,6 +93,9 @@ function docker_pull_or_build {
         echo -en "\\nPushing image ${this_target}... " | tee -a "${REPORT}"
         docker image push "${image_ref}"
         echo "done." >> "${REPORT}"
+
+        docker tag "${image_ref}" "${latest_ref}"
+        docker image push "${latest_ref}"
     fi
 
     docker tag "${image_ref}" "${cache_ref}"
