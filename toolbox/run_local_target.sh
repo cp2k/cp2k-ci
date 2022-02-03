@@ -90,12 +90,12 @@ arch_hash=$(echo "${CPUID} " | md5sum | awk '{print $1}')
 target_image="gcr.io/${PROJECT}/img_${TARGET}-arch-${arch_hash::3}"
 cache_image="gcr.io/${PROJECT}/img_${CACHE_FROM}-arch-${arch_hash::3}"
 branch="${GIT_BRANCH//\//-}"
-docker image pull "${target_image}:${branch}"
-docker image pull "${target_image}:master"
-docker image pull "${target_image}:latest"
+docker image pull --quiet "${target_image}:${branch}"
+docker image pull --quiet "${target_image}:master"
+docker image pull --quiet "${target_image}:latest"
 if [ "${CACHE_FROM}" != "" ] ; then
-    docker image pull "${cache_image}:master"
-    docker image pull "${cache_image}:latest"
+    docker image pull --quiet "${cache_image}:master"
+    docker image pull --quiet "${cache_image}:latest"
 fi
 echo "done." >> "${REPORT}"
 
@@ -123,7 +123,7 @@ if ! docker build \
   last_layer=$(docker images --quiet | head -n 1)
   docker tag "${last_layer}" "${target_image}:${branch}"
   echo -en "\\nPushing image of last succesful step ${last_layer}... " | tee -a "${REPORT}"
-  docker image push "${target_image}:${branch}"
+  docker image push --quiet "${target_image}:${branch}"
   echo "done." >> "${REPORT}"
   # Write error report and quit.
   echo -e "\\nSummary: Docker build had non-zero exit status.\\nStatus: FAILED" | tee -a "${REPORT}"
@@ -131,9 +131,9 @@ if ! docker build \
   exit 0  # Prevent crash looping.
 fi
 echo -en "\\nPushing new image... " | tee -a "${REPORT}"
-docker image push "${target_image}:${branch}"
+docker image push --quiet "${target_image}:${branch}"
 docker tag "${target_image}:${branch}" "${target_image}:latest"
-docker image push "${target_image}:latest"
+docker image push --quiet "${target_image}:latest"
 echo "done." >> "${REPORT}"
 
 echo -e "\\n#################### Running Image ${TARGET} ####################" | tee -a "${REPORT}"
