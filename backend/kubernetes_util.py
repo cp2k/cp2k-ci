@@ -155,7 +155,7 @@ class KubernetesUtil:
         privileged = self.api.V1SecurityContext(privileged=True)
         toolbox_image = self.image_base + "/img_cp2kci_toolbox:latest"
         k8s_env_vars = [self.api.V1EnvVar(k, v) for k, v in env_vars.items()]
-        command = "./run_remote_target.sh" if is_remote else "./run_target.sh"
+        command = "./run_remote_target.sh" if is_remote else "./run_local_target.sh"
         container = self.api.V1Container(name="main",
                                          image=toolbox_image,
                                          resources=self.resources(target),
