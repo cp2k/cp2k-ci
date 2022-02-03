@@ -2,7 +2,10 @@
 
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: ["build", "-t", "img_cp2kci_toolbox", "./toolbox/"]
+  args: ["pull", "gcr.io/$PROJECT_ID/img_cp2kci_toolbox:latest"]
+
+- name: 'gcr.io/cloud-builders/docker'
+  args: ["build", "--cache-from", "gcr.io/$PROJECT_ID/img_cp2kci_toolbox:latest", "-t", "img_cp2kci_toolbox", "./toolbox/"]
 
 - name: 'gcr.io/cloud-builders/docker'
   args: ["tag", "img_cp2kci_toolbox", "gcr.io/$PROJECT_ID/img_cp2kci_toolbox:$SHORT_SHA"]
