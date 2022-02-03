@@ -34,77 +34,6 @@ function sigterm_handler {
 }
 trap sigterm_handler SIGTERM
 
-# Helper for building or pulling docker images.
-function docker_pull_or_build {
-    local this_target=$1
-    local this_dockerfile=$2
-    local build_args_str=$3
-    local this_build_path=$4
-    local this_cache_from=$5
-
-    # Convert build_arg_str into array of flags suitable for docker build.
-    local build_args_flags=()
-    for arg in ${build_args_str} ; do
-        build_args_flags+=("--build-arg")
-        build_args_flags+=("${arg}")
-    done
-
-    # Compute cache key for docker image.
-    local git_tree_sha=$(git log -n1 --format=%H ".${this_build_path}")
-    local build_args_hash=$(echo "${build_args_flags[@]}" | md5sum | awk '{print $1}')
-    local arch_hash=$(echo "${CPUID} " | md5sum | awk '{print $1}')
-    local image_name="gcr.io/${PROJECT}/img_${this_target}-arch-${arch_hash::3}"
-    local image_tag="gittree-${git_tree_sha::7}-buildargs-${build_args_hash::7}"
-    local image_ref="${image_name}:${image_tag}"
-    local latest_ref="${image_name}:latest"
-    local cache_ref="${image_name}:${GIT_BRANCH//\//-}"
-    local ext_cache_ref="gcr.io/${PROJECT}/img_${this_cache_from}-arch-${arch_hash::3}:latest"
-
-    echo -en "Trying to pull image ${this_target}... " | tee -a "${REPORT}"
-    if docker image pull "${image_ref}" ; then
-        echo "success :-)" >> "${REPORT}"
-    else
-        echo "image not found." >> "${REPORT}"
-        echo -e "\\n#################### Building Image ${this_target} ####################" | tee -a "${REPORT}"
-        echo -e "Dockerfile: ${this_dockerfile}" |& tee -a "${REPORT}"
-        echo -e "Build-Path: ${this_build_path}" |& tee -a "${REPORT}"
-        echo -e "Build-Args: ${build_args_str}\\n" |& tee -a "${REPORT}"
-        docker image pull "${cache_ref}" || docker image pull "${image_name}:master"
-        [ "${this_cache_from}" != "" ] && docker image pull "${ext_cache_ref}"
-        if ! docker build \
-               --memory "${MEMORY_LIMIT_MB}m" \
-               --cache-from "${cache_ref}" \
-               --cache-from "${image_name}:master" \
-               --cache-from "${ext_cache_ref}" \
-               --tag "${image_ref}" \
-               --file ".${this_dockerfile}" \
-               "${build_args_flags[@]}" ".${this_build_path}" |& tee -a "${REPORT}" ; then
-          # Build failed, salvage last succesful step.
-          last_layer=$(docker images --quiet | head -n 1)
-          docker tag "${last_layer}" "${cache_ref}"
-          echo -en "\\nPushing image of last succesful step ${last_layer} ... " | tee -a "${REPORT}"
-          docker image push "${cache_ref}"
-          echo "done." >> "${REPORT}"
-          # Write error report and quit.
-          echo -e "\\nSummary: Docker build had non-zero exit status.\\nStatus: FAILED" | tee -a "${REPORT}"
-          upload_final_report
-          exit 0  # Prevent crash looping.
-        fi
-        echo -en "\\nPushing image ${this_target}... " | tee -a "${REPORT}"
-        docker image push "${image_ref}"
-        echo "done." >> "${REPORT}"
-
-        docker tag "${image_ref}" "${latest_ref}"
-        docker image push "${latest_ref}"
-    fi
-
-    docker tag "${image_ref}" "${cache_ref}"
-    docker image push "${cache_ref}"
-
-    # Export image_ref into gobal variable for subsequent docker build or run.
-    IMAGE_REF=${image_ref}
-}
-
 #===============================================================================
 
 # Write report header
@@ -155,9 +84,57 @@ if ! git -c advice.detachedHead=false checkout "${GIT_REF}" ; then
 fi
 git --no-pager log -1 --pretty='%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: %an%nCommitSubject: %s%n' |& tee -a "${REPORT}"
 
-# Pull or build docker containers.
-docker_pull_or_build "${TARGET}" "${DOCKERFILE}" "${BUILD_ARGS}" "${BUILD_PATH}" "${CACHE_FROM}"
+# Pull existing docker images.
+echo -en "Populating docker build cache... " | tee -a "${REPORT}"
+arch_hash=$(echo "${CPUID} " | md5sum | awk '{print $1}')
+target_image="gcr.io/${PROJECT}/img_${TARGET}-arch-${arch_hash::3}"
+cache_image="gcr.io/${PROJECT}/img_${CACHE_FROM}-arch-${arch_hash::3}"
+branch="${GIT_BRANCH//\//-}"
+docker image pull "${target_image}:${branch}"
+docker image pull "${target_image}:master"
+docker image pull "${target_image}:latest"
+if [ "${CACHE_FROM}" != "" ] ; then
+    docker image pull "${cache_image}:master"
+    docker image pull "${cache_image}:latest"
+fi
+echo "done." >> "${REPORT}"
 
+echo -e "\\n#################### Building Image ${TARGET} ####################" | tee -a "${REPORT}"
+echo -e "Dockerfile: ${DOCKERFILE}" |& tee -a "${REPORT}"
+echo -e "Build-Path: ${BUILD_PATH}" |& tee -a "${REPORT}"
+echo -e "Build-Args: ${BUILD_ARGS}\\n" |& tee -a "${REPORT}"
+# Convert BUILD_ARGS into array of flags suitable for docker build.
+build_args_flags=()
+for arg in ${BUILD_ARGS} ; do
+    build_args_flags+=("--build-arg")
+    build_args_flags+=("${arg}")
+done
+if ! docker build \
+       --memory "${MEMORY_LIMIT_MB}m" \
+       --cache-from "${target_image}:${branch}" \
+       --cache-from "${target_image}:master" \
+       --cache-from "${target_image}:latest" \
+       --cache-from "${cache_image}:master" \
+       --cache-from "${cache_image}:latest" \
+       --tag "${target_image}:${branch}" \
+       --file ".${DOCKERFILE}" \
+       "${build_args_flags[@]}" ".${BUILD_PATH}" |& tee -a "${REPORT}" ; then
+  # Build failed, salvage last succesful step.
+  last_layer=$(docker images --quiet | head -n 1)
+  docker tag "${last_layer}" "${target_image}:${branch}"
+  echo -en "\\nPushing image of last succesful step ${last_layer}... " | tee -a "${REPORT}"
+  docker image push "${target_image}:${branch}"
+  echo "done." >> "${REPORT}"
+  # Write error report and quit.
+  echo -e "\\nSummary: Docker build had non-zero exit status.\\nStatus: FAILED" | tee -a "${REPORT}"
+  upload_final_report
+  exit 0  # Prevent crash looping.
+fi
+echo -en "\\nPushing new image... " | tee -a "${REPORT}"
+docker image push "${target_image}:${branch}"
+docker tag "${target_image}:${branch}" "${target_image}:latest"
+docker image push "${target_image}:latest"
+echo "done." >> "${REPORT}"
 
 echo -e "\\n#################### Running Image ${TARGET} ####################" | tee -a "${REPORT}"
 ARTIFACTS_DIR="/tmp/artifacts"
@@ -167,7 +144,7 @@ if ! docker run --init --cap-add=SYS_PTRACE --shm-size=1g \
        --env "GIT_BRANCH=${GIT_BRANCH}" \
        --env "GIT_REF=${GIT_REF}" \
        --volume "${ARTIFACTS_DIR}:/workspace/artifacts" \
-       "${IMAGE_REF}"  |& tee -a "${REPORT}" ; then
+       "${target_image}:${branch}"  |& tee -a "${REPORT}" ; then
     echo -e "\\nSummary: Docker run had non-zero exit status.\\nStatus: FAILED" | tee -a "${REPORT}"
 fi
 
