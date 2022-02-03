@@ -86,6 +86,7 @@ git --no-pager log -1 --pretty='%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: 
 
 # Pull existing docker images.
 echo -en "Populating docker build cache... " | tee -a "${REPORT}"
+echo ""
 arch_hash=$(echo "${CPUID} " | md5sum | awk '{print $1}')
 target_image="gcr.io/${PROJECT}/img_${TARGET}-arch-${arch_hash::3}"
 cache_image="gcr.io/${PROJECT}/img_${CACHE_FROM}-arch-${arch_hash::3}"
@@ -123,6 +124,7 @@ if ! docker build \
   last_layer=$(docker images --quiet | head -n 1)
   docker tag "${last_layer}" "${target_image}:${branch}"
   echo -en "\\nPushing image of last succesful step ${last_layer}... " | tee -a "${REPORT}"
+  echo ""
   docker image push --quiet "${target_image}:${branch}"
   echo "done." >> "${REPORT}"
   # Write error report and quit.
@@ -131,6 +133,7 @@ if ! docker build \
   exit 0  # Prevent crash looping.
 fi
 echo -en "\\nPushing new image... " | tee -a "${REPORT}"
+echo ""
 docker image push --quiet "${target_image}:${branch}"
 docker tag "${target_image}:${branch}" "${target_image}:latest"
 docker image push --quiet "${target_image}:latest"
@@ -151,6 +154,7 @@ fi
 # Upload artifacts.
 if [ -n "$(ls -A ${ARTIFACTS_DIR})" ]; then
     echo -en "\\nUploading artifacts... " | tee -a "${REPORT}"
+    echo ""
     ARTIFACTS_TGZ="/tmp/artifacts.tgz"
     cd "${ARTIFACTS_DIR}" || exit
     tar -czf "${ARTIFACTS_TGZ}" -- *
