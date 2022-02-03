@@ -6,7 +6,7 @@
 set -o pipefail
 
 # Check input.
-for key in TARGET DOCKERFILE BUILD_ARGS BUILD_PATH CACHE_FROM NUM_GPUS_REQUIRED PARENT_TARGET PARENT_DOCKERFILE PARENT_BUILD_ARGS PARENT_BUILD_PATH PARENT_CACHE_FROM GIT_REPO GIT_BRANCH GIT_REF REPORT_UPLOAD_URL ARTIFACTS_UPLOAD_URL ; do
+for key in TARGET DOCKERFILE BUILD_ARGS BUILD_PATH CACHE_FROM NUM_GPUS_REQUIRED GIT_REPO GIT_BRANCH GIT_REF REPORT_UPLOAD_URL ARTIFACTS_UPLOAD_URL ; do
     value="$(eval echo \$${key})"
     echo "${key}=\"${value}\""
 done
@@ -156,10 +156,6 @@ fi
 git --no-pager log -1 --pretty='%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: %an%nCommitSubject: %s%n' |& tee -a "${REPORT}"
 
 # Pull or build docker containers.
-if [ "${PARENT_TARGET}" != "" ] ; then
-    docker_pull_or_build "${PARENT_TARGET}" "${PARENT_DOCKERFILE}" "${PARENT_BUILD_ARGS}" "${PARENT_BUILD_PATH}" "${PARENT_CACHE_FROM}"
-    BUILD_ARGS=${BUILD_ARGS//__PARENT_IMAGE__/${IMAGE_REF}}
-fi
 docker_pull_or_build "${TARGET}" "${DOCKERFILE}" "${BUILD_ARGS}" "${BUILD_PATH}" "${CACHE_FROM}"
 
 

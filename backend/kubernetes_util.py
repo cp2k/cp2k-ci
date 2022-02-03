@@ -117,19 +117,6 @@ class KubernetesUtil:
             env_vars["CACHE_FROM"] = self.config.get(target, "cache_from", fallback="")
             env_vars["NUM_GPUS_REQUIRED"] = self.config.get(target, "gpu", fallback="0")
 
-
-        # optional parent target, ie. cp2k toolchain.
-        if self.config.has_option(target, "parent"):
-            parent = self.config.get(target, "parent")
-            assert not self.config.has_option(parent, "parent")
-            assert self.config.get(parent, "repository") == env_vars["GIT_REPO"]
-            env_vars["PARENT_TARGET"] = parent
-            env_vars["PARENT_DOCKERFILE"] = self.config.get(parent, "dockerfile")
-            env_vars["PARENT_BUILD_PATH"] = self.config.get(parent, "build_path")
-            env_vars["PARENT_BUILD_ARGS"] = self.config.get(parent, "build_args", fallback="")
-            env_vars["PARENT_CACHE_FROM"] = self.config.get(parent, "cache_from", fallback="")
-
-
         # volumens
         volumes = []
         volume_mounts = []

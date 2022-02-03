@@ -17,10 +17,6 @@ The typical use case consists of the following steps:
 
 The CP2K-CI is configured via the [cp2k-ci.conf](./backend/cp2k-ci.conf) file. The file has the format of the python [configparser](https://docs.python.org/3/library/configparser.html). Each section is refereed to as a _target_. Typical sections looks like this:
 ```
-[cp2k-toolchain-mpich]
-repository:   cp2k
-dockerfile:   /tools/toolchain/Dockerfile
-
 [cp2k-sdbg]
 display_name: Regtest sdbg
 repository:   cp2k
@@ -28,8 +24,6 @@ cpu:          32
 nodepools:    pool-highcpu-32-haswell
 tags:         required_check_run dashboard
 related_path: Makefile|src|tests|exts|tools/(build_utils|regtesting|toolchain|docker)
-parent:       cp2k-toolchain-mpich
-build_args:   TOOLCHAIN=__PARENT_IMAGE__
 build_path:   /tools/docker
 dockerfile:   /tools/docker/Dockerfile.test_sdbg
 ```
@@ -47,10 +41,9 @@ The fields have the following meaning. All lists are white-space separated.
 | nodepools    | List of eligible nodepools, [see also](setup/create_node_pools.sh).                          |
 | tags         | Tags which determine when and how this target is build and run.                              |
 | related_path | Regular expression matching relevant files.                                                  |
-| build_args   | List of Docker build arguments. If parent is present `__PARENT_IMAGE__` gets substituted.    |
+| build_args   | List of Docker build arguments.                                                              |
 | build_path   | Path to build context within given repository.                                               |
 | dockerfile   | Path to Dockerfile within given repository.                                                  |
-| parent       | Optional name of target that has to be build first, e.g. the toolchain.                      |
 | cache_from   | Optional name of target that should be used as additional cache source during the build.     |
 
 Tags determine when and how a target is build and run.
