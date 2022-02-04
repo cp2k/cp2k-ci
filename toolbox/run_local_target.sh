@@ -110,6 +110,9 @@ for arg in ${BUILD_ARGS} ; do
     build_args_flags+=("--build-arg")
     build_args_flags+=("${arg}")
 done
+# The order of the --cache-from images matters!
+# Since builds step are usually not reproducible, there can be multiple suitable
+# layers in the cache. Preferring fresher images should counteract divergence.
 if ! docker build \
        --memory "${MEMORY_LIMIT_MB}m" \
        --cache-from "${cache_image}:latest" \
