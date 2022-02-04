@@ -112,12 +112,13 @@ for arg in ${BUILD_ARGS} ; do
 done
 if ! docker build \
        --memory "${MEMORY_LIMIT_MB}m" \
-       --cache-from "${target_image}:${branch}" \
-       --cache-from "${target_image}:master" \
-       --cache-from "${target_image}:latest" \
-       --cache-from "${cache_image}:master" \
        --cache-from "${cache_image}:latest" \
+       --cache-from "${cache_image}:master" \
+       --cache-from "${target_image}:latest" \
+       --cache-from "${target_image}:master" \
+       --cache-from "${target_image}:${branch}" \
        --tag "${target_image}:${branch}" \
+       --tag "${target_image}:latest" \
        --file ".${DOCKERFILE}" \
        "${build_args_flags[@]}" ".${BUILD_PATH}" |& tee -a "${REPORT}" ; then
   # Build failed, salvage last succesful step.
@@ -135,7 +136,6 @@ fi
 echo -en "\\nPushing new image... " | tee -a "${REPORT}"
 echo ""
 docker image push --quiet "${target_image}:${branch}"
-docker tag "${target_image}:${branch}" "${target_image}:latest"
 docker image push --quiet "${target_image}:latest"
 echo "done." >> "${REPORT}"
 
