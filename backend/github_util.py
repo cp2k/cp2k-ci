@@ -7,9 +7,9 @@ from time import time, sleep
 from pathlib import Path
 from datetime import datetime
 
-GITHUB_APP_ID = os.environ['GITHUB_APP_ID']
-GITHUB_APP_KEY = Path(os.environ['GITHUB_APP_KEY']).read_text()
-GITHUB_APP_INSTALL_ID = os.environ['GITHUB_APP_INSTALL_ID']
+GITHUB_APP_ID = os.environ["GITHUB_APP_ID"]
+GITHUB_APP_KEY = Path(os.environ["GITHUB_APP_KEY"]).read_text()
+GITHUB_APP_INSTALL_ID = os.environ["GITHUB_APP_INSTALL_ID"]
 
 
 class GithubUtil:
@@ -21,15 +21,17 @@ class GithubUtil:
     # --------------------------------------------------------------------------
     def get_master_head_sha(self):
         # Get sha of latest git commit.
-        return next(self.iterate("/commits"))['sha']
+        return next(self.iterate("/commits"))["sha"]
 
     # --------------------------------------------------------------------------
     def get_installation_token(self):
         # Create App JWT token.
         now = int(time())
-        payload = {"iat": now,
-                   "exp": now + 540,  # expiration, stay away from 10min limit
-                   "iss": GITHUB_APP_ID}
+        payload = {
+            "iat": now,
+            "exp": now + 540,  # expiration, stay away from 10min limit
+            "iss": GITHUB_APP_ID,
+        }
         app_token = jwt.encode(payload, GITHUB_APP_KEY, algorithm="RS256")
         # Setup header for app.
         headers = {
@@ -39,7 +41,7 @@ class GithubUtil:
         # Obtain installation access token.
         url = "https://api.github.com/app/installations/{}/access_tokens"
         r = self.http_request("POST", url.format(GITHUB_APP_INSTALL_ID), headers)
-        return r.json()['token']
+        return r.json()["token"]
 
     # --------------------------------------------------------------------------
     def now(self):
@@ -55,8 +57,10 @@ class GithubUtil:
     def http_request(self, method, url, headers, body=None):
         if url.startswith("/"):
             url = self.repo_url + url
-        r = requests.request(method=method, url=url, headers=headers, json=body, timeout=20)
-        remaining = r.headers.get('X-RateLimit-Remaining', None)
+        r = requests.request(
+            method=method, url=url, headers=headers, json=body, timeout=20
+        )
+        remaining = r.headers.get("X-RateLimit-Remaining", None)
         if remaining and int(remaining) < 100:
             print("X-RateLimit-Remaining: {}".format(remaining))
         if r.status_code >= 400:
@@ -66,8 +70,10 @@ class GithubUtil:
 
     # --------------------------------------------------------------------------
     def authenticated_http_request(self, method, url, body=None, retries=0):
-        headers = {"Authorization": "token " + self.token,
-                   "Accept": "application/vnd.github.antiope-preview+json"}
+        headers = {
+            "Authorization": "token " + self.token,
+            "Accept": "application/vnd.github.antiope-preview+json",
+        }
         # we get occasional 401 errors https://github.com/cp2k/cp2k-ci/issues/45
         for i in range(retries):
             try:
@@ -100,5 +106,6 @@ class GithubUtil:
     # ------------------- -------------------------------------------------------
     def patch(self, url, body):
         return self.authenticated_http_request("PATCH", url, body).json()
+
 
 # EOF
