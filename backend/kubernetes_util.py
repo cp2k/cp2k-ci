@@ -123,7 +123,7 @@ class KubernetesUtil:
             env_vars["DOCKERFILE"] = self.config.get(target, "dockerfile")
             env_vars["BUILD_PATH"] = self.config.get(target, "build_path")
             build_args = self.config.get(target, "build_args", fallback="")
-            env_vars["BUILD_ARGS"] = f"{build_args} GIT_COMMIT_SHA={git_ref}"
+            env_vars["BUILD_ARGS"] = f"{build_args} GIT_COMMIT_SHA={git_ref}".strip()
             env_vars["CACHE_FROM"] = self.config.get(target, "cache_from", fallback="")
             env_vars["NUM_GPUS_REQUIRED"] = self.config.get(target, "gpu", fallback="0")
 
