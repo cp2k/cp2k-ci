@@ -138,23 +138,23 @@ docker image push --quiet "${target_image}:${branch}"
 echo "done." >> "${REPORT}"
 
 echo -e "\\n#################### Running Image ${TARGET} ####################" | tee -a "${REPORT}"
-ARTIFACTS_DIR="/tmp/artifacts"
-mkdir "${ARTIFACTS_DIR}"
 if ! docker run --init --cap-add=SYS_PTRACE --shm-size=1g \
        --memory "${MEMORY_LIMIT_MB}m" \
        --env "GIT_BRANCH=${GIT_BRANCH}" \
        --env "GIT_REF=${GIT_REF}" \
-       --volume "${ARTIFACTS_DIR}:/workspace/artifacts" \
+       --name "my_container" \
        "${target_image}:${branch}"  |& tee -a "${REPORT}" ; then
     echo -e "\\nSummary: Docker run had non-zero exit status.\\nStatus: FAILED" | tee -a "${REPORT}"
 fi
 
+
+
 # Upload artifacts.
-if [ -n "$(ls -A ${ARTIFACTS_DIR})" ]; then
+if docker cp my_container:/workspace/artifacts /tmp/ ; then
     echo -en "\\nUploading artifacts... " | tee -a "${REPORT}"
     echo ""
     ARTIFACTS_TGZ="/tmp/artifacts.tgz"
-    cd "${ARTIFACTS_DIR}" || exit
+    cd /tmp/artifacts || exit
     tar -czf "${ARTIFACTS_TGZ}" -- *
     upload_file "${ARTIFACTS_UPLOAD_URL}" "${ARTIFACTS_TGZ}" "application/gzip"
     echo "done" >> "${REPORT}"
