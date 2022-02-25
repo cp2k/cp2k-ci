@@ -16,7 +16,7 @@ for IMAGE in $(gcloud container images list --format="get(name)"); do
     elif [[ $IMAGE == *"img_"* ]]; then
         # CI images are removed after 30 days to keep storage costs low.
         MAX_AGE_DAYS=30
-        FILTER="timestamp.datetime < -P${MAX_AGE_DAYS}D AND -tags:(master) AND -tags:(latest)"
+        FILTER="timestamp.datetime < -P${MAX_AGE_DAYS}D AND -tags:(master)"
     else
         # All other images that don't match "img_*" are ignored.
         continue

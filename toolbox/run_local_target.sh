@@ -93,10 +93,8 @@ cache_image="gcr.io/${PROJECT}/img_${CACHE_FROM}-arch-${arch_hash::3}"
 branch="${GIT_BRANCH//\//-}"
 docker image pull --quiet "${target_image}:${branch}"
 docker image pull --quiet "${target_image}:master"
-docker image pull --quiet "${target_image}:latest"
 if [ "${CACHE_FROM}" != "" ] ; then
     docker image pull --quiet "${cache_image}:master"
-    docker image pull --quiet "${cache_image}:latest"
 fi
 echo "done." >> "${REPORT}"
 
@@ -112,16 +110,13 @@ for arg in ${BUILD_ARGS} ; do
 done
 # The order of the --cache-from images matters!
 # Since builds step are usually not reproducible, there can be multiple suitable
-# layers in the cache. Preferring fresher images should counteract divergence.
+# layers in the cache. Preferring prevalent images should counteract divergence.
 if ! docker build \
        --memory "${MEMORY_LIMIT_MB}m" \
-       --cache-from "${cache_image}:latest" \
        --cache-from "${cache_image}:master" \
-       --cache-from "${target_image}:latest" \
        --cache-from "${target_image}:master" \
        --cache-from "${target_image}:${branch}" \
        --tag "${target_image}:${branch}" \
-       --tag "${target_image}:latest" \
        --file ".${DOCKERFILE}" \
        "${build_args_flags[@]}" ".${BUILD_PATH}" |& tee -a "${REPORT}" ; then
   # Build failed, salvage last succesful step.
@@ -139,7 +134,6 @@ fi
 echo -en "\\nPushing new image... " | tee -a "${REPORT}"
 echo ""
 docker image push --quiet "${target_image}:${branch}"
-docker image push --quiet "${target_image}:latest"
 echo "done." >> "${REPORT}"
 
 echo -e "\\n#################### Running Image ${TARGET} ####################" | tee -a "${REPORT}"
