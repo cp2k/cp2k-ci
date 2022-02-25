@@ -118,6 +118,7 @@ if ! docker build \
        --cache-from "${target_image}:${branch}" \
        --tag "${target_image}:${branch}" \
        --file ".${DOCKERFILE}" \
+       --shm-size=1g \
        "${build_args_flags[@]}" ".${BUILD_PATH}" |& tee -a "${REPORT}" ; then
   # Build failed, salvage last succesful step.
   last_layer=$(docker images --quiet | head -n 1)
