@@ -23,7 +23,6 @@ repository:   cp2k
 cpu:          32
 nodepools:    pool-highcpu-32-haswell
 tags:         required_check_run dashboard
-related_path: Makefile|src|tests|exts|tools/(build_utils|regtesting|toolchain|docker)
 build_path:   /tools/docker
 dockerfile:   /tools/docker/Dockerfile.test_sdbg
 ```
@@ -40,7 +39,6 @@ The fields have the following meaning. All lists are white-space separated.
 | gpu          | Number of GPUs to allocate for building and running.                                         |
 | nodepools    | List of eligible nodepools, [see also](setup/create_node_pools.sh).                          |
 | tags         | Tags which determine when and how this target is build and run.                              |
-| related_path | Regular expression matching relevant files.                                                  |
 | build_args   | List of Docker build arguments.                                                              |
 | build_path   | Path to build context within given repository.                                               |
 | dockerfile   | Path to Dockerfile within given repository.                                                  |
