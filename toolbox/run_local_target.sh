@@ -82,6 +82,7 @@ if ! git -c advice.detachedHead=false checkout "${GIT_REF}" ; then
     sleep 30
     exit 1  # trigger retry
 fi
+git submodule update --init --recursive
 git --no-pager log -1 --pretty='%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: %an%nCommitSubject: %s%n' |& tee -a "${REPORT}"
 
 # Pull existing docker images.
