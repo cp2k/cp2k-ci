@@ -1,6 +1,6 @@
 # author: Ole Schuett
 
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: cp2kci-backend-deployment
@@ -19,7 +19,7 @@ spec:
       automountServiceAccountToken: True
       dnsPolicy: Default
       nodeSelector:
-        beta.kubernetes.io/instance-type: n1-standard-1
+        node.kubernetes.io/instance-type: n2d-standard-2
       volumes:
       - name: backend-gcp-key-volume
         secret:

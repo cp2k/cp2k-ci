@@ -1,6 +1,6 @@
 # author: Ole Schuett
 
-apiVersion: batch/v1beta1
+apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: cp2kci-dashboard-cronjob
@@ -15,7 +15,7 @@ spec:
           automountServiceAccountToken: False
           dnsPolicy: Default
           nodeSelector:
-            beta.kubernetes.io/instance-type: n1-standard-1
+            node.kubernetes.io/instance-type: n2d-standard-2
           volumes:
           - name: cronjob-gcp-key-volume
             secret:
