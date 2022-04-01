@@ -1,0 +1,37 @@
+# author: Ole Schuett
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cp2kci-dashboard-some-cronjob
+spec:
+  schedule: "*/5  *  *  *  *"
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: False
+          dnsPolicy: Default
+          nodeSelector:
+            node.kubernetes.io/instance-type: n2d-standard-2
+          volumes:
+          - name: cronjob-gcp-key-volume
+            secret:
+              secretName: "cronjob-gcp-key"
+          containers:
+          - name: cp2kci-dashboard-some-cronjob-container
+            image: gcr.io/cp2k-org-project/img_cp2kci_toolbox:latest
+            command: ["/opt/cp2kci-toolbox/cp2kcictl.py", "submit_dashboard_test", "cp2k-sdbg"]
+            resources:
+              requests:
+                cpu: 1m
+            env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: '/var/secrets/google/key.json'
+            volumeMounts:
+            - name: cronjob-gcp-key-volume
+              mountPath: "/var/secrets/google"
+
+#EOF

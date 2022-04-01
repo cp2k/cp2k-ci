@@ -3,9 +3,9 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: cp2kci-dashboard-cronjob
+  name: cp2kci-dashboard-all-cronjob
 spec:
-  schedule: "0 11,19 *  *  *"
+  schedule: "3 11,19 *  *  *"
   jobTemplate:
     spec:
       backoffLimit: 0
@@ -21,7 +21,7 @@ spec:
             secret:
               secretName: "cronjob-gcp-key"
           containers:
-          - name: cp2kci-dashboard-cronjob-container
+          - name: cp2kci-dashboard-all-cronjob-container
             image: gcr.io/cp2k-org-project/img_cp2kci_toolbox:latest
             command: ["/opt/cp2kci-toolbox/cp2kcictl.py", "submit_all_dashboard_tests"]
             resources:
