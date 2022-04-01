@@ -384,7 +384,8 @@ def submit_dashboard_test(target, head_sha, force=False):
             and "cp2kci-dashboard" in job.metadata.annotations
             and (job.status.active or job.status.completion_time)
         ):
-            return  # A job is already running or completed - do not submit another one.
+            print("Found already underway dashboard job for: {}.".format(target))
+            return  # Do not submit another job.
 
     # Download first 1kb of report and compare against CommitSHA.
     latest_report_sha = None
