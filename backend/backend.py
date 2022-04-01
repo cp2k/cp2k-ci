@@ -376,6 +376,16 @@ def submit_dashboard_test(target, head_sha, force=False):
     assert target.startswith("cp2k-")
     test_name = target[5:]
 
+    # Check if a dashboard job for given target is already underway.
+    run_job_list = kubeutil.list_jobs("cp2kci=run")
+    for job in run_job_list.items:
+        if (
+            job.metadata.annotations["cp2kci-target"] == target
+            and "cp2kci-dashboard" in job.metadata.annotations
+            and (job.status.active or job.status.completion_time)
+        ):
+            return  # A job is already running or completed - do not submit another one.
+
     # Download first 1kb of report and compare against CommitSHA.
     latest_report_sha = None
     report_fn = "dashboard_" + test_name + "_report.txt"
