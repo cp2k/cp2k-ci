@@ -31,7 +31,7 @@ kubeutil = KubernetesUtil(
 )
 
 
-# ===================================================================================================
+# ======================================================================================
 def main():
     print("starting")
 
@@ -53,7 +53,7 @@ def main():
         sleep(5)
 
 
-# ===================================================================================================
+# ======================================================================================
 def tick(cycle):
     run_job_list = kubeutil.list_jobs("cp2kci=run")
     if cycle % 30 == 0:  # every 2.5 minutes
@@ -67,7 +67,7 @@ def tick(cycle):
             kubeutil.delete_job(job.metadata.name)
 
 
-# ===================================================================================================
+# ======================================================================================
 def process_pubsub_message(message):
     try:
         data = json.loads(message.data)
@@ -79,7 +79,7 @@ def process_pubsub_message(message):
         message.ack()  # prevent crash looping
 
 
-# ===================================================================================================
+# ======================================================================================
 def process_rpc(rpc, **args):
     print("Got RPC: " + rpc)
 
@@ -104,6 +104,11 @@ def process_rpc(rpc, **args):
     elif rpc == "submit_dashboard_test":
         target = args["target"]
         head_sha = GithubUtil("cp2k").get_master_head_sha()
+        submit_dashboard_test(target, head_sha)
+
+    elif rpc == "submit_dashboard_test_force":
+        target = args["target"]
+        head_sha = GithubUtil("cp2k").get_master_head_sha()
         submit_dashboard_test(target, head_sha, force=True)
 
     elif rpc == "submit_check_run":
@@ -124,7 +129,7 @@ def process_rpc(rpc, **args):
         print("Unknown RPC: " + rpc)
 
 
-# ===================================================================================================
+# ======================================================================================
 def process_github_event(event, body):
     action = body.get("action", "")
     print("Got github even: {} action: {}".format(event, action))
@@ -173,7 +178,7 @@ def process_github_event(event, body):
         pass  # Unhandled github even - there are many of these.
 
 
-# ===================================================================================================
+# ======================================================================================
 def await_mergeability(gh, pr, check_run_name, check_run_external_id):
     # https://developer.github.com/v3/git/#checking-mergeability-of-pull-requests
 
@@ -212,7 +217,7 @@ def await_mergeability(gh, pr, check_run_name, check_run_external_id):
     raise Exception("Mergeability check timeout on PR {}".format(pr_number))
 
 
-# ===================================================================================================
+# ======================================================================================
 def process_pull_request(gh, pr_number, sender):
     pr = gh.get("/pulls/{}".format(pr_number))
 
@@ -254,7 +259,7 @@ def process_pull_request(gh, pr_number, sender):
             submit_check_run(target, gh, pr, sender, optional=True)
 
 
-# ===================================================================================================
+# ======================================================================================
 def check_git_history(gh, pr, commits):
     check_run = {
         "name": "Git History",
@@ -284,7 +289,7 @@ def check_git_history(gh, pr, commits):
     return check_run["conclusion"] == "success"
 
 
-# ===================================================================================================
+# ======================================================================================
 def format_external_id(pr_number, target):
     return "{};{}".format(pr_number, target)
 
@@ -295,7 +300,7 @@ def parse_external_id(ext_id):
     return pr_number, target
 
 
-# ===================================================================================================
+# ======================================================================================
 def submit_check_run(target, gh, pr, sender, optional=False):
     check_run = {
         "name": config.get(target, "display_name"),
@@ -335,7 +340,7 @@ def submit_check_run(target, gh, pr, sender, optional=False):
     )
 
 
-# ===================================================================================================
+# ======================================================================================
 def cancel_check_runs(target, gh, pr, sender):
     run_job_list = kubeutil.list_jobs("cp2kci=run")
     for job in run_job_list.items:
@@ -370,40 +375,40 @@ def cancel_check_runs(target, gh, pr, sender):
         kubeutil.delete_job(job.metadata.name)
 
 
-# ===================================================================================================
+# ======================================================================================
 def submit_dashboard_test(target, head_sha, force=False):
     assert config.get(target, "repository") == "cp2k"
     assert target.startswith("cp2k-")
     test_name = target[5:]
 
-    # Check if a dashboard job for given target is already underway.
-    run_job_list = kubeutil.list_jobs("cp2kci=run")
-    for job in run_job_list.items:
-        if (
-            job.metadata.annotations["cp2kci-target"] == target
-            and "cp2kci-dashboard" in job.metadata.annotations
-            and (job.status.active or job.status.completion_time)
-        ):
-            print("Found already underway dashboard job for: {}.".format(target))
-            return  # Do not submit another job.
+    if not force:
+        # Check if a dashboard job for given target is already underway.
+        run_job_list = kubeutil.list_jobs("cp2kci=run")
+        for job in run_job_list.items:
+            if (
+                job.metadata.annotations["cp2kci-target"] == target
+                and "cp2kci-dashboard" in job.metadata.annotations
+                and (job.status.active or job.status.completion_time)
+            ):
+                print("Found already underway dashboard job for: {}.".format(target))
+                return  # Do not submit another job.
 
-    # Download first 1kb of report and compare against CommitSHA.
-    latest_report_sha = None
-    report_fn = "dashboard_" + test_name + "_report.txt"
-    blob = output_bucket.get_blob(report_fn)
-    if blob:
-        # We only download the first 1024 bytes which might break a unicode character.
-        report_txt = blob.download_as_string(end=1024).decode("utf8", errors="replace")
-        m = re.search("(^|\n)CommitSHA: (\w{40})\n", report_txt)
-        if m:
-            latest_report_sha = m.group(2)
+        # Download first 1kb of report and compare against CommitSHA.
+        blob = output_bucket.get_blob("dashboard_" + test_name + "_report.txt")
+        if blob:
+            # We only download the first 1024 bytes which might break a unicode character.
+            report = blob.download_as_string(end=1024).decode("utf8", errors="replace")
+            m = re.search("(^|\n)CommitSHA: (\w{40})\n", report)
+            if m and m.group(2) == head_sha:
+                print("Found up-to-date dashboard report for: {}.".format(target))
+                return  # No need to submit another job.
 
-    if latest_report_sha != head_sha or force:
-        job_annotations = {"cp2kci-dashboard": "yes"}
-        kubeutil.submit_run(target, "master", head_sha, job_annotations)
+    # Finally submit a new job.
+    job_annotations = {"cp2kci-dashboard": "yes"}
+    kubeutil.submit_run(target, "master", head_sha, job_annotations)
 
 
-# ===================================================================================================
+# ======================================================================================
 def poll_pull_requests(job_list):
     """A save guard in case we're missing a callback or loosing BatchJob"""
 
@@ -461,7 +466,7 @@ def poll_pull_requests(job_list):
                 process_pull_request(gh, pr["number"], pr["user"]["login"])
 
 
-# ===================================================================================================
+# ======================================================================================
 def publish_job_to_dashboard(job):
     job_annotations = job.metadata.annotations
     if job.status.completion_time is None:
@@ -484,7 +489,7 @@ def publish_job_to_dashboard(job):
         dest_blob.rewrite(src_blob)
 
 
-# ===================================================================================================
+# ======================================================================================
 def publish_job_to_github(job):
     status = "queued"
     if job.status.active:
@@ -538,7 +543,7 @@ def publish_job_to_github(job):
     kubeutil.patch_job_annotations(job.metadata.name, job_annotations)
 
 
-# ===================================================================================================
+# ======================================================================================
 def parse_report(report_blob):
     report = {"status": "UNKNOWN", "summary": "", "git-sha": None}
     try:
@@ -559,7 +564,7 @@ def parse_report(report_blob):
     return report
 
 
-# ===================================================================================================
+# ======================================================================================
 if __name__ == "__main__":
     main()
 

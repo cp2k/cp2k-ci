@@ -9,9 +9,9 @@ import google.cloud.pubsub
 
 project = google.auth.default()[1]
 publish_client = google.cloud.pubsub.PublisherClient()
-pubsub_topic = 'projects/' + project + '/topics/cp2kci-topic'
+pubsub_topic = "projects/" + project + "/topics/cp2kci-topic"
 
-#===================================================================================================
+# ======================================================================================
 def main():
     if len(sys.argv) < 2:
         print_usage()
@@ -21,6 +21,10 @@ def main():
         message_backend(rpc=rpc)
 
     elif rpc == "submit_dashboard_test":
+        target = sys.argv[2]
+        message_backend(rpc=rpc, target=target)
+
+    elif rpc == "submit_dashboard_test_force":
         target = sys.argv[2]
         message_backend(rpc=rpc, target=target)
 
@@ -39,23 +43,27 @@ def main():
         print("Unknown command: {}\n".format(rpc))
         print_usage()
 
-#===================================================================================================
+
+# ======================================================================================
 def print_usage():
     print("Usage: cp2kcictl.py [ submit_check_run <repo> <pr_number> <target> |")
     print("                      process_pull_request <repo> <pr_number> |")
     print("                      submit_dashboard_test <target> |")
+    print("                      submit_dashboard_test_force <target> |")
     print("                      submit_all_dashboard_tests ]")
     sys.exit(1)
 
-#===================================================================================================
+
+# ======================================================================================
 def message_backend(**args):
     data = json.dumps(args).encode("utf8")
     future = publish_client.publish(pubsub_topic, data)
     message_id = future.result()
     print("Sent message {} to topic {}.".format(message_id, pubsub_topic))
 
-#===================================================================================================
+
+# ======================================================================================
 if __name__ == "__main__":
     main()
 
-#EOF
+# EOF
