@@ -378,8 +378,6 @@ def cancel_check_runs(target, gh, pr, sender):
 # ======================================================================================
 def submit_dashboard_test(target, head_sha, force=False):
     assert config.get(target, "repository") == "cp2k"
-    assert target.startswith("cp2k-")
-    test_name = target[5:]
 
     if not force:
         # Check if a dashboard job for given target is already underway.
@@ -393,19 +391,36 @@ def submit_dashboard_test(target, head_sha, force=False):
                 print("Found already underway dashboard job for: {}.".format(target))
                 return  # Do not submit another job.
 
-        # Download first 1kb of report and compare against CommitSHA.
-        blob = output_bucket.get_blob("dashboard_" + test_name + "_report.txt")
-        if blob:
-            # We only download the first 1024 bytes which might break a unicode character.
-            report = blob.download_as_string(end=1024).decode("utf8", errors="replace")
-            m = re.search("(^|\n)CommitSHA: (\w{40})\n", report)
-            if m and m.group(2) == head_sha:
-                print("Found up-to-date dashboard report for: {}.".format(target))
-                return  # No need to submit another job.
+        if get_dashboard_report_sha(target) == head_sha:
+            print("Found up-to-date dashboard report for: {}.".format(target))
+            return  # No need to submit another job.
+
+        if self.config.has_option(target, "cache_from"):
+            if get_dashboard_report_sha(self.config.get("cache_from")) != head_sha:
+                print("Found stale cache_from dashboard report for: {}.".format(target))
+                return  # Won't submit a job without up-to-date cache_from image.
 
     # Finally submit a new job.
     job_annotations = {"cp2kci-dashboard": "yes"}
     kubeutil.submit_run(target, "master", head_sha, job_annotations)
+
+
+# ======================================================================================
+def get_dashboard_report_sha(target):
+    assert config.get(target, "repository") == "cp2k"
+    assert target.startswith("cp2k-")
+    test_name = target[5:]
+
+    # Downloading first 1kb of report should be enough to read CommitSHA.
+    blob = output_bucket.get_blob("dashboard_" + test_name + "_report.txt")
+    if blob:
+        # We only download the first 1024 bytes which might break a unicode character.
+        report = blob.download_as_string(end=1024).decode("utf8", errors="replace")
+        m = re.search("(^|\n)CommitSHA: (\w{40})\n", report)
+        if m:
+            return m.group(2)
+
+    return None  # CommitSHA not found.
 
 
 # ======================================================================================
