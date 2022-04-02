@@ -395,8 +395,8 @@ def submit_dashboard_test(target, head_sha, force=False):
             print("Found up-to-date dashboard report for: {}.".format(target))
             return  # No need to submit another job.
 
-        if self.config.has_option(target, "cache_from"):
-            if get_dashboard_report_sha(self.config.get("cache_from")) != head_sha:
+        if config.has_option(target, "cache_from"):
+            if get_dashboard_report_sha(config.get("cache_from")) != head_sha:
                 print("Found stale cache_from dashboard report for: {}.".format(target))
                 return  # Won't submit a job without up-to-date cache_from image.
 
