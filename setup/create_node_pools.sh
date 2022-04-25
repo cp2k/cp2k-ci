@@ -6,7 +6,7 @@ CLUSTER_NAME="cp2k-cluster"
 
 set -x
 
-for CPUS in 8 16 32 64 ; do
+for CPUS in 8 16 32 ; do
     #gcloud container node-pools delete --cluster="${CLUSTER_NAME}" --quiet pool-highcpu-${CPUS}-milan
 
     gcloud container node-pools create pool-highcpu-${CPUS}-milan \
@@ -22,6 +22,18 @@ for CPUS in 8 16 32 64 ; do
         --num-nodes=0 \
         --node-taints="costly=true:NoSchedule"
 done
+
+gcloud container node-pools create pool-t2d-32 \
+    --cluster="${CLUSTER_NAME}" \
+    --machine-type="t2d-standard-32" \
+    --spot \
+    --enable-autoupgrade \
+    --enable-autorepair \
+    --enable-autoscaling \
+    --max-nodes=1 \
+    --min-nodes=0 \
+    --num-nodes=0 \
+    --node-taints="costly=true:NoSchedule"
 
 # There is no n1-standard-24 machine type.
 # Using custom type with same 3.75GB/vCPU ratio.
