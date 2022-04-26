@@ -1,5 +1,6 @@
 # author: Ole Schuett
 
+timeout: 900s
 steps:
 - name: 'gcr.io/cloud-builders/docker'
   args: ["pull", "gcr.io/$PROJECT_ID/img_cp2kci_toolbox:latest"]
