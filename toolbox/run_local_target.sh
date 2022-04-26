@@ -40,10 +40,17 @@ trap sigterm_handler SIGTERM
 REPORT=/tmp/report.txt
 START_DATE=$(date --utc --rfc-3339=seconds)
 echo "StartDate: ${START_DATE}" | tee -a "${REPORT}"
+
 CPUID=$(cpuid -1 | grep "(synth)" | cut -c14-)
 NUM_CPUS=$(cpuid | grep -c "(synth)")
-echo "CpuId: ${NUM_CPUS}x ${CPUID}" | tee -a "${REPORT}"
+SMT_ACTIVE=$(cat /sys/devices/system/cpu/smt/active)
 MEMORY_LIMIT_MB="$((NUM_CPUS * 700))"  # ... ought to be enough for anybody.
+if [ "${SMT_ACTIVE}" != "1" ] ; then
+    MEMORY_LIMIT_MB="$((MEMORY_LIMIT_MB * 2))"
+    CPUID="${CPUID} (SMT disabled)"
+fi
+echo "CpuId: ${NUM_CPUS}x ${CPUID}" | tee -a "${REPORT}"
+
 if (( NUM_GPUS_REQUIRED > 0 )) ; then
     GPUID=$(nvidia-smi --query-gpu=gpu_name --format=csv | tail -n 1)
     NUM_GPUS=$(nvidia-smi --query-gpu=gpu_name --format=csv,noheader | wc -l)
