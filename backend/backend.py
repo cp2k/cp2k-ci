@@ -490,22 +490,29 @@ def publish_job_to_dashboard(job):
     if job.status.completion_time is None:
         return
 
+    if "cp2kci-dashboard-published" in job_annotations:
+        return
+
     target = job_annotations["cp2kci-target"]
+    print("Publishing {} to dashboard.".format(target))
+
     assert config.get(target, "repository") == "cp2k"
     assert target.startswith("cp2k-")
     test_name = target[5:]
 
     src_blob = output_bucket.blob(job_annotations["cp2kci-report-path"])
     if src_blob.exists():
-        print("Publishing {} report to dashboard.".format(target))
         dest_blob = output_bucket.blob("dashboard_" + test_name + "_report.txt")
         dest_blob.rewrite(src_blob)
 
     src_blob = output_bucket.blob(job_annotations["cp2kci-artifacts-path"])
     if src_blob.exists():
-        print("Publishing {} artifacts to dashboard.".format(target))
         dest_blob = output_bucket.blob("dashboard_" + test_name + "_artifacts.tgz")
         dest_blob.rewrite(src_blob)
+
+    # update job_annotations
+    job_annotations["cp2kci-dashboard-published"] = "yes"
+    kubeutil.patch_job_annotations(job.metadata.name, job_annotations)
 
 
 # ======================================================================================
