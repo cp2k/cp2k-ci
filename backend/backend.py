@@ -491,18 +491,19 @@ def publish_job_to_dashboard(job):
         return
 
     target = job_annotations["cp2kci-target"]
-    print("Publishing {} to dashboard.".format(target))
     assert config.get(target, "repository") == "cp2k"
     assert target.startswith("cp2k-")
     test_name = target[5:]
 
     src_blob = output_bucket.blob(job_annotations["cp2kci-report-path"])
     if src_blob.exists():
+        print("Publishing {} report to dashboard.".format(target))
         dest_blob = output_bucket.blob("dashboard_" + test_name + "_report.txt")
         dest_blob.rewrite(src_blob)
 
     src_blob = output_bucket.blob(job_annotations["cp2kci-artifacts-path"])
     if src_blob.exists():
+        print("Publishing {} artifacts to dashboard.".format(target))
         dest_blob = output_bucket.blob("dashboard_" + test_name + "_artifacts.tgz")
         dest_blob.rewrite(src_blob)
 
