@@ -59,11 +59,12 @@ def tick(cycle):
     if cycle % 30 == 0:  # every 2.5 minutes
         poll_pull_requests(run_job_list)
     for job in run_job_list.items:
-        if "cp2kci-dashboard" in job.metadata.annotations:
+        job_annotations = job.metadata.annotations
+        if "cp2kci-dashboard" in job_annotations:
             publish_job_to_dashboard(job)
-        if "cp2kci-check-run-url" in job.metadata.annotations:
+        if "cp2kci-check-run-url" in job_annotations:
             publish_job_to_github(job)
-        if job.status.completion_time:
+        if job.status.completion_time and "cp2kci-force" not in job_annotations:
             kubeutil.delete_job(job.metadata.name)
 
 
@@ -402,6 +403,8 @@ def submit_dashboard_test(target, head_sha, force=False):
 
     # Finally submit a new job.
     job_annotations = {"cp2kci-dashboard": "yes"}
+    if force:
+        job_annotations["cp2kci-force"] = "yes"
     kubeutil.submit_run(target, "master", head_sha, job_annotations)
 
 
