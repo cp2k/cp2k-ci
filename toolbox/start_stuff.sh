@@ -14,6 +14,9 @@ if which nvidia-persistenced &> /dev/null ; then
   nvidia-persistenced
 fi
 
+# Docker relies on the old iptable behavior.
+update-alternatives --set iptables /usr/sbin/iptables-legacy
+
 /usr/bin/dockerd --default-runtime=nvidia -H unix:// &
 sleep 1  # wait a bit for docker deamon
 
