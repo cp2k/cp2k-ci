@@ -27,6 +27,7 @@ gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${BACKE
 gcloud artifacts repositories add-iam-policy-binding "cp2kci" --member="serviceAccount:${RUNNER_ACCOUNT}" --role="roles/artifactregistry.writer" --location="us-central1"  # for uploading docker images
 
 # cronjob
+gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${CRONJOB_ACCOUNT}" --role="roles/storage.admin"              # for uploading usage_stats.txt
 gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${CRONJOB_ACCOUNT}" --role="roles/pubsub.publisher"           # for sending messsages to backend
 gcloud artifacts repositories add-iam-policy-binding "cp2kci" --member="serviceAccount:${CRONJOB_ACCOUNT}" --role="roles/artifactregistry.repoAdmin" --location="us-central1"  # for removing old images
 
