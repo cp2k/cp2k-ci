@@ -17,7 +17,7 @@ fi
 # Docker relies on the old iptable behavior.
 update-alternatives --set iptables /usr/sbin/iptables-legacy
 
-/usr/bin/dockerd --default-runtime=nvidia -H unix:// &
+/usr/bin/dockerd --default-runtime=nvidia -H unix:// --registry-mirror=https://mirror.gcr.io &
 sleep 1  # wait a bit for docker deamon
 
 if ! docker version ; then
