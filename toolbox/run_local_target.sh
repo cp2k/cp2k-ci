@@ -42,7 +42,6 @@ START_DATE=$(date --utc --rfc-3339=seconds)
 echo "StartDate: ${START_DATE}" | tee -a "${REPORT}"
 
 CPUID=$(cpuid -1 | grep "(synth)" | cut -c14-)
-arch_hash=$(echo "${CPUID} " | md5sum | awk '{print $1}')  # ignores SMT status
 NUM_CPUS=$(cpuid | grep -c "(synth)")
 SMT_ACTIVE=$(cat /sys/devices/system/cpu/smt/active)
 MEMORY_LIMIT_MB="$((NUM_CPUS * 700))"  # ... ought to be enough for anybody.
@@ -96,8 +95,8 @@ git --no-pager log -1 --pretty='%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: 
 # Pull existing docker images.
 echo -en "Populating docker build cache... " | tee -a "${REPORT}"
 echo ""
-target_image="gcr.io/${PROJECT}/img_${TARGET}-arch-${arch_hash::3}"
-cache_image="gcr.io/${PROJECT}/img_${CACHE_FROM}-arch-${arch_hash::3}"
+target_image="gcr.io/${PROJECT}/img_${TARGET}"
+cache_image="gcr.io/${PROJECT}/img_${CACHE_FROM}"
 branch="${GIT_BRANCH//\//-}"
 docker image pull --quiet "${target_image}:${branch}"
 docker image pull --quiet "${target_image}:master"
