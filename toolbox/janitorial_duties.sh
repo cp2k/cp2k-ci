@@ -9,26 +9,27 @@ gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIAL
 
 echo "Looking for old images..."
 
-for IMAGE in $(gcloud container images list --format="get(name)"); do
+DOCKER_REPO="us-central1-docker.pkg.dev/cp2k-org-project/cp2kci"
+for IMAGE in $(gcloud artifacts docker images list ${DOCKER_REPO} --format="get(package)"); do
     if [[ $IMAGE == *"img_cp2kci_"* || $IMAGE == *"img_cp2kprecommit"* ]]; then
         # For system images we only keep current production version.
         FILTER="-tags:(latest)"
     elif [[ $IMAGE == *"img_"* ]]; then
         # CI images are removed after 7 days to keep storage costs low.
         MAX_AGE_DAYS=7
-        FILTER="timestamp.datetime < -P${MAX_AGE_DAYS}D AND -tags:(master)"
+        FILTER="updateTime < -P${MAX_AGE_DAYS}D AND -tags:(master)"
     else
         # All other images that don't match "img_*" are ignored.
         continue
     fi
 
-    for SHA in $(gcloud container images list-tags --filter="${FILTER}" --format="get(digest)" "${IMAGE}"); do
-        gcloud --quiet container images delete --force-delete-tags "${IMAGE}@${SHA}"
+    for SHA in $(gcloud artifacts docker images list --include-tags --filter="${FILTER}" --format="get(version)" "${IMAGE}"); do
+        gcloud --quiet artifacts docker images delete --delete-tags "${IMAGE}@${SHA}"
     done
 
     # Remove images without tags. They are created by simultaneous builds.
-    for SHA in $(gcloud container images list-tags --filter="-tags:*" --format="get(digest)" "${IMAGE}"); do
-        gcloud --quiet container images delete --force-delete-tags "${IMAGE}@${SHA}"
+    for SHA in $(gcloud artifacts docker images list --include-tags --filter="-tags:*" --format="get(version)" "${IMAGE}"); do
+        gcloud --quiet artifacts docker images delete --delete-tags "${IMAGE}@${SHA}"
     done
 done
 

@@ -1,20 +1,20 @@
 # author: Ole Schuett
 
+substitutions:
+  _IMAGE_NAME: "us-central1-docker.pkg.dev/${PROJECT_ID}/cp2kci/img_cp2kci_frontend"
+
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: ["build", "-t", "img_cp2kci_frontend", "./frontend/"]
+  args: ["build", "-t", "${_IMAGE_NAME}:${SHORT_SHA}", "./frontend/"]
 
 - name: 'gcr.io/cloud-builders/docker'
-  args: ["tag", "img_cp2kci_frontend", "gcr.io/$PROJECT_ID/img_cp2kci_frontend:$SHORT_SHA"]
+  args: ["push", "${_IMAGE_NAME}:${SHORT_SHA}"]
 
 - name: 'gcr.io/cloud-builders/docker'
-  args: ["push", "gcr.io/$PROJECT_ID/img_cp2kci_frontend:$SHORT_SHA"]
+  args: ["tag", "${_IMAGE_NAME}:${SHORT_SHA}", "${_IMAGE_NAME}:latest"]
 
 - name: 'gcr.io/cloud-builders/docker'
-  args: ["tag", "img_cp2kci_frontend", "gcr.io/$PROJECT_ID/img_cp2kci_frontend:latest"]
-
-- name: 'gcr.io/cloud-builders/docker'
-  args: ["push", "gcr.io/$PROJECT_ID/img_cp2kci_frontend:latest"]
+  args: ["push", "${_IMAGE_NAME}:latest"]
 
 - name: "gcr.io/cloud-builders/gcloud"
   args:
@@ -23,6 +23,6 @@ steps:
    - "cp2kci-frontend"
    - "--platform=managed"
    - "--region=us-central1"
-   - "--image=gcr.io/$PROJECT_ID/img_cp2kci_frontend:$SHORT_SHA"
+   - "--image=${_IMAGE_NAME}:${SHORT_SHA}"
 
 #EOF
