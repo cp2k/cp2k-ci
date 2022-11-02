@@ -14,8 +14,8 @@ for IMAGE in $(gcloud container images list --format="get(name)"); do
         # For system images we only keep current production version.
         FILTER="-tags:(latest)"
     elif [[ $IMAGE == *"img_"* ]]; then
-        # CI images are removed after 30 days to keep storage costs low.
-        MAX_AGE_DAYS=30
+        # CI images are removed after 7 days to keep storage costs low.
+        MAX_AGE_DAYS=7
         FILTER="timestamp.datetime < -P${MAX_AGE_DAYS}D AND -tags:(master)"
     else
         # All other images that don't match "img_*" are ignored.
