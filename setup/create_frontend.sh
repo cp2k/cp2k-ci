@@ -14,9 +14,9 @@ FRONTEND_ACCOUNT="${FRONTEND_ACCOUNT_NAME}@${PROJECT}.iam.gserviceaccount.com"
 set -x
 
 gcloud run deploy "cp2kci-frontend" \
-   --cpu=1 \
-   --memory=128M \
-   --max-instances=3 \
+   --cpu="1" \
+   --memory="128Mi" \
+   --max-instances="3" \
    --platform="managed" \
    --region="us-central1" \
    --allow-unauthenticated \

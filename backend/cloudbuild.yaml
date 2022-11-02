@@ -5,7 +5,8 @@ substitutions:
 
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: ["pull", "${_IMAGE_NAME}:latest"]
+  entrypoint: 'bash'  # see https://github.com/GoogleCloudPlatform/cloud-builders/issues/253
+  args: ["-c", "docker pull ${_IMAGE_NAME}:latest || exit 0"]
 
 - name: 'gcr.io/cloud-builders/docker'
   args: ["build", "--cache-from", "${_IMAGE_NAME}:latest", "-t", "${_IMAGE_NAME}:${SHORT_SHA}", "./backend/"]
