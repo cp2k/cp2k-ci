@@ -22,7 +22,7 @@ spec:
               secretName: "cronjob-gcp-key"
           containers:
           - name: cp2kci-dashboard-all-cronjob-container
-            image: gcr.io/cp2k-org-project/img_cp2kci_toolbox:latest
+            image: "us-central1-docker.pkg.dev/cp2k-org-project/cp2kci/img_cp2kci_toolbox:latest"
             command: ["/opt/cp2kci-toolbox/cp2kcictl.py", "submit_all_dashboard_tests"]
             resources:
               requests:

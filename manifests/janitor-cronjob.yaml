@@ -22,7 +22,7 @@ spec:
               secretName: "cronjob-gcp-key"
           containers:
           - name: cp2kci-janitor-cronjob-container
-            image: gcr.io/cp2k-org-project/img_cp2kci_toolbox:latest
+            image: "us-central1-docker.pkg.dev/cp2k-org-project/cp2kci/img_cp2kci_toolbox:latest"
             command: ["/opt/cp2kci-toolbox/janitorial_duties.sh"]
             resources:
               requests:

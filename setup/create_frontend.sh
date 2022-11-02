@@ -21,7 +21,7 @@ gcloud run deploy "cp2kci-frontend" \
    --region="us-central1" \
    --allow-unauthenticated \
    --service-account="${FRONTEND_ACCOUNT}" \
-   --image="gcr.io/cp2k-org-project/img_cp2kci_frontend2" \
+   --image="us-central1-docker.pkg.dev/${PROJECT}/cp2kci/img_cp2kci_frontend" \
    --update-env-vars="GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}"
 
 gcloud beta run domain-mappings create \
