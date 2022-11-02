@@ -79,6 +79,7 @@ done
 /opt/cp2kci-toolbox/start_stuff.sh
 PROJECT=$(gcloud config list --format 'value(core.project)')
 PROJECT=${PROJECT:-"cp2k-org-project"}
+DOCKER_REPO="us-central1-docker.pkg.dev/${PROJECT}/cp2kci"
 
 # Update git repo which contains the Dockerfiles.
 cd "/workspace/${GIT_REPO}" || exit
@@ -95,8 +96,8 @@ git --no-pager log -1 --pretty='%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: 
 # Pull existing docker images.
 echo -en "Populating docker build cache... " | tee -a "${REPORT}"
 echo ""
-target_image="gcr.io/${PROJECT}/img_${TARGET}"
-cache_image="gcr.io/${PROJECT}/img_${CACHE_FROM}"
+target_image="${DOCKER_REPO}/img_${TARGET}"
+cache_image="${DOCKER_REPO}/img_${CACHE_FROM}"
 branch="${GIT_BRANCH//\//-}"
 docker image pull --quiet "${target_image}:${branch}"
 docker image pull --quiet "${target_image}:master"

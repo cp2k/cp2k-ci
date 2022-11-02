@@ -34,6 +34,6 @@ gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
 #gcloud config list account
 
 
-gcloud auth configure-docker --quiet
+gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
 #EOF
