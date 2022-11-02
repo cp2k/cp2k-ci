@@ -26,6 +26,7 @@ gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${BACKE
 # runner
 #TODO roles/storage.objectAdmin should be enough
 gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${RUNNER_ACCOUNT}" --role="roles/storage.admin"               # for uploading docker images
+gcloud artifacts repositories add-iam-policy-binding "cp2kci" --member="serviceAccount:${RUNNER_ACCOUNT}" --role="roles/artifactregistry.writer" --location="us-central1"  # for uploading docker images
 
 # cronjob
 gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:${CRONJOB_ACCOUNT}" --role="roles/pubsub.publisher"           # for sending messsages to backend
