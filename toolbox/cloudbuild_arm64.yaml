@@ -14,7 +14,7 @@ steps:
   args: ["run", "--privileged", "multiarch/qemu-user-static", "--reset", "-p", "yes"]
 
 - name: 'gcr.io/cloud-builders/docker'
-  args: ["build", "-f", "Dockerfile.arm64", "--cache-from", "${_IMAGE_NAME}:latest", "-t", "${_IMAGE_NAME}:${SHORT_SHA}", "./toolbox/"]
+  args: ["build", "-f", "./toolbox/Dockerfile.arm64", "--cache-from", "${_IMAGE_NAME}:latest", "-t", "${_IMAGE_NAME}:${SHORT_SHA}", "./toolbox/"]
 
 - name: 'gcr.io/cloud-builders/docker'
   args: ["push", "${_IMAGE_NAME}:${SHORT_SHA}"]
