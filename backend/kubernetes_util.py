@@ -175,13 +175,13 @@ class KubernetesUtil:
             )
 
         # container with privileged=True as needed by docker build
+        arch = self.config.get(target, "arch", fallback="x86")
         privileged = self.api.V1SecurityContext(privileged=True)
         k8s_env_vars = [self.api.V1EnvVar(k, v) for k, v in env_vars.items()]
         command = "./run_remote_target.sh" if is_remote else "./run_local_target.sh"
-        toolbox_image = "toolbox_arm64" if "arm64" in target else "toolbox_x86"
         container = self.api.V1Container(
             name="main",
-            image=f"{self.image_base}/img_cp2kci_{toolbox_image}:latest",
+            image=f"{self.image_base}/img_cp2kci_toolbox_{arch}:latest",
             resources=self.resources(target),
             command=[command],
             volume_mounts=volume_mounts,
@@ -189,12 +189,18 @@ class KubernetesUtil:
             env=k8s_env_vars,
         )
 
+        # tolerations
+        tolerations = [self.api.V1Toleration(key="costly", operator="Exists")]
+        if arch == "arm64":
+            tolerations.append(
+                self.api.V1Toleration(key="kubernetes.io/arch=arm64", operator="Exists")
+            )
+
         # pod
-        tolerate_costly = self.api.V1Toleration(key="costly", operator="Exists")
         pod_spec = self.api.V1PodSpec(
             containers=[container],
             volumes=volumes,
-            tolerations=[tolerate_costly],
+            tolerations=tolerations,
             termination_grace_period_seconds=0,
             restart_policy="OnFailure",  # https://github.com/kubernetes/kubernetes/issues/79398
             dns_policy="Default",  # bypass kube-dns

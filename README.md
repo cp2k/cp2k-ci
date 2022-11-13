@@ -37,6 +37,7 @@ The fields have the following meaning. All lists are white-space separated.
 | repository   | Name of repository below https://github.com/cp2k/ .                                          |
 | cpu          | Number of CPUs to allocate for building and running.                                         |
 | gpu          | Number of GPUs to allocate for building and running.                                         |
+| arch         | Architecture of the CPU, possible values are "arm64" and "x86", defaults to "x86".           |
 | nodepools    | List of eligible nodepools, [see also](setup/create_node_pools.sh).                          |
 | tags         | Tags which determine when and how this target is build and run.                              |
 | build_args   | List of Docker build arguments.                                                              |
