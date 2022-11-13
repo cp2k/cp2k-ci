@@ -190,17 +190,14 @@ class KubernetesUtil:
         )
 
         # tolerations
-        tolerations = [self.api.V1Toleration(key="costly", operator="Exists")]
-        if arch == "arm64":
-            tolerations.append(
-                self.api.V1Toleration(key="kubernetes.io/arch=arm64", operator="Exists")
-            )
+        tolerate_costly = self.api.V1Toleration(key="costly", operator="Exists")
+        tolerate_arch = self.api.V1Toleration(key="kubernetes.io/arch", value=arch)
 
         # pod
         pod_spec = self.api.V1PodSpec(
             containers=[container],
             volumes=volumes,
-            tolerations=tolerations,
+            tolerations=[tolerate_costly, tolerate_arch],
             termination_grace_period_seconds=0,
             restart_policy="OnFailure",  # https://github.com/kubernetes/kubernetes/issues/79398
             dns_policy="Default",  # bypass kube-dns
