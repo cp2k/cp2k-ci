@@ -11,7 +11,7 @@ steps:
   args: ["-c", "docker pull ${_IMAGE_NAME}:latest || exit 0"]
 
 - name: 'gcr.io/cloud-builders/docker'
-  args: ["build", "--cache-from", "${_IMAGE_NAME}:latest", "-t", "${_IMAGE_NAME}:${SHORT_SHA}", "./toolbox/"]
+  args: ["build", "-f", "./toolbox/Dockerfile.x86", "--cache-from", "${_IMAGE_NAME}:latest", "-t", "${_IMAGE_NAME}:${SHORT_SHA}", "./toolbox/"]
 
 - name: 'gcr.io/cloud-builders/docker'
   args: ["push", "${_IMAGE_NAME}:${SHORT_SHA}"]

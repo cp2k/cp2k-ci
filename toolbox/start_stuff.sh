@@ -4,20 +4,28 @@
 
 # The nvidia libraries depend on the driver and are mounted at runtime.
 # Since dockerd ignores $LD_LIBRARY_PATH for some reason, we'll run ldconfig now.
-echo "/usr/local/nvidia/lib" >> /etc/ld.so.conf.d/nvidia.conf
-echo "/usr/local/nvidia/lib64" >> /etc/ld.so.conf.d/nvidia.conf
-ldconfig
+if [ -d "/usr/local/nvidia" ]; then
+    echo "/usr/local/nvidia/lib" >> /etc/ld.so.conf.d/nvidia.conf
+    echo "/usr/local/nvidia/lib64" >> /etc/ld.so.conf.d/nvidia.conf
+    ldconfig
+fi
 
 # Start nvidia persistence daemon, if available.
 #https://docs.nvidia.com/deploy/driver-persistence/index.html
 if which nvidia-persistenced &> /dev/null ; then
-  nvidia-persistenced
+    nvidia-persistenced
 fi
 
 # Docker relies on the old iptable behavior.
 update-alternatives --set iptables /usr/sbin/iptables-legacy
 
-/usr/bin/dockerd --default-runtime=nvidia -H unix:// --registry-mirror=https://mirror.gcr.io &
+if which nvidia-container-runtime &> /dev/null ; then
+    DOCKER_RUNTIME="nvidia"
+else
+    DOCKER_RUNTIME="runc"
+fi
+
+/usr/bin/dockerd --default-runtime=${DOCKER_RUNTIME} -H unix:// --registry-mirror=https://mirror.gcr.io &
 sleep 1  # wait a bit for docker deamon
 
 if ! docker version ; then

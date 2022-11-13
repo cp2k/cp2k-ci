@@ -28,12 +28,6 @@ RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true && \
 COPY requirements.txt .
 RUN pip3 install -r requirements.txt
 
-# install cpuid tool from https://github.com/klauspost/cpuid
-RUN wget -q https://www.cp2k.org/static/downloads/cpuid-Linux_arm64_2.2.0.tar.gz && \
-    echo "f20d60658ba78810683ca0bf45471fb0bc6d9d8abd1c0c414783d9bc25f29978  cpuid-Linux_arm64_2.2.0.tar.gz" | sha256sum --check && \
-    tar -xzf cpuid-Linux_arm64_2.2.0.tar.gz && \
-    cp ./cpuid /usr/bin/
-
 # install docker
 RUN apt-key adv --fetch-keys https://download.docker.com/linux/ubuntu/gpg && \
     add-apt-repository "deb [arch=arm64] https://download.docker.com/linux/ubuntu kinetic stable" && \
@@ -47,6 +41,9 @@ RUN apt-key adv --fetch-keys https://packages.cloud.google.com/apt/doc/apt-key.g
     apt-get update -qq && \
     apt-get install -qq google-cloud-sdk && \
     rm -rf /var/lib/apt/lists/*
+
+# install fake cpuid tool
+RUN echo -e '#!/bin/bash\necho "   (synth) = ARM64"\n' > /usr/bin/cpuid && chmod +x /usr/bin/cpuid
 
 # clone repos
 RUN git clone --recursive --depth=1 --single-branch -b master https://github.com/cp2k/cp2k.git /workspace/cp2k
