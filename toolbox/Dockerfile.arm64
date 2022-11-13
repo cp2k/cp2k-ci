@@ -1,0 +1,57 @@
+FROM arm64v8/ubuntu:22.04
+
+# author: Ole Schuett
+
+USER root
+WORKDIR /tmp
+
+# install ubuntu packages
+RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true && \
+    apt-get update -qq && apt-get install -qq --no-install-recommends \
+    ca-certificates \
+    wget \
+    less \
+    nano \
+    git \
+    gpg-agent \
+    apt-transport-https \
+    ca-certificates \
+    software-properties-common \
+    openssh-client \
+    python3-pip \
+    python3-wheel \
+    python3-setuptools \
+    dirmngr \
+  && rm -rf /var/lib/apt/lists/*
+
+# install python packages
+COPY requirements.txt .
+RUN pip3 install -r requirements.txt
+
+# install cpuid tool from https://github.com/klauspost/cpuid
+RUN wget -q https://www.cp2k.org/static/downloads/cpuid-Linux_arm64_2.2.0.tar.gz && \
+    echo "f20d60658ba78810683ca0bf45471fb0bc6d9d8abd1c0c414783d9bc25f29978  cpuid-Linux_arm64_2.2.0.tar.gz" | sha256sum --check && \
+    tar -xzf cpuid-Linux_arm64_2.2.0.tar.gz && \
+    cp ./cpuid /usr/bin/
+
+# install docker
+RUN apt-key adv --fetch-keys https://download.docker.com/linux/ubuntu/gpg && \
+    add-apt-repository "deb [arch=arm64] https://download.docker.com/linux/ubuntu kinetic stable" && \
+    apt-get update  -qq && \
+    apt-get install -qq docker-ce && \
+    rm -rf /var/lib/apt/lists/*
+
+# install gcloud
+RUN apt-key adv --fetch-keys https://packages.cloud.google.com/apt/doc/apt-key.gpg && \
+    add-apt-repository "deb http://packages.cloud.google.com/apt cloud-sdk main" && \
+    apt-get update -qq && \
+    apt-get install -qq google-cloud-sdk && \
+    rm -rf /var/lib/apt/lists/*
+
+# clone repos
+RUN git clone --recursive --depth=1 --single-branch -b master https://github.com/cp2k/cp2k.git /workspace/cp2k
+
+WORKDIR /opt/cp2kci-toolbox
+COPY *.sh *.py /opt/cp2kci-toolbox/
+
+#EOF

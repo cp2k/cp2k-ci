@@ -1,0 +1,28 @@
+# author: Ole Schuett
+
+timeout: 900s
+
+substitutions:
+  _IMAGE_NAME: "us-central1-docker.pkg.dev/${PROJECT_ID}/cp2kci/img_cp2kci_toolbox_arm64"
+
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'  # see https://github.com/GoogleCloudPlatform/cloud-builders/issues/253
+  args: ["-c", "docker pull ${_IMAGE_NAME}:latest || exit 0"]
+
+- name: 'gcr.io/cloud-builders/docker'
+  args: ["run", "--privileged", "multiarch/qemu-user-static", "--reset", "-p", "yes"]
+
+- name: 'gcr.io/cloud-builders/docker'
+  args: ["build", "-f", "Dockerfile.arm64", "--cache-from", "${_IMAGE_NAME}:latest", "-t", "${_IMAGE_NAME}:${SHORT_SHA}", "./toolbox/"]
+
+- name: 'gcr.io/cloud-builders/docker'
+  args: ["push", "${_IMAGE_NAME}:${SHORT_SHA}"]
+
+- name: 'gcr.io/cloud-builders/docker'
+  args: ["tag", "${_IMAGE_NAME}:${SHORT_SHA}", "${_IMAGE_NAME}:latest"]
+
+- name: 'gcr.io/cloud-builders/docker'
+  args: ["push", "${_IMAGE_NAME}:latest"]
+
+#EOF
