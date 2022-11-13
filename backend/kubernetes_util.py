@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 
 class KubernetesUtil:
-    def __init__(self, config, output_bucket, toolbox_image, namespace="default"):
+    def __init__(self, config, output_bucket, image_base, namespace="default"):
         try:
             kubernetes.config.load_kube_config()
         except Exception:
@@ -14,7 +14,7 @@ class KubernetesUtil:
         self.timeout = 3  # seconds
         self.config = config
         self.output_bucket = output_bucket
-        self.toolbox_image = toolbox_image
+        self.image_base = image_base
         self.namespace = namespace
         self.api = kubernetes.client
         self.batch_api = kubernetes.client.BatchV1Api()
@@ -178,9 +178,10 @@ class KubernetesUtil:
         privileged = self.api.V1SecurityContext(privileged=True)
         k8s_env_vars = [self.api.V1EnvVar(k, v) for k, v in env_vars.items()]
         command = "./run_remote_target.sh" if is_remote else "./run_local_target.sh"
+        toolbox_image = "toolbox_arm64" if "arm64" in target else "toolbox"
         container = self.api.V1Container(
             name="main",
-            image=self.toolbox_image,
+            image=f"{self.image_base}/img_cp2kci_{toolbox_image}:latest",
             resources=self.resources(target),
             command=[command],
             volume_mounts=volume_mounts,

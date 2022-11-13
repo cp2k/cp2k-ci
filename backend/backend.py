@@ -26,9 +26,11 @@ KNOWN_TAGS = ("required_check_run", "optional_check_run", "dashboard")
 config = configparser.ConfigParser()
 config.read("./cp2k-ci.conf")
 
-toolbox_image = f"us-central1-docker.pkg.dev/{gcp_project}/cp2kci/img_cp2kci_toolbox:latest"
-kubeutil = KubernetesUtil(config=config, output_bucket=output_bucket, toolbox_image=toolbox_image)
-
+kubeutil = KubernetesUtil(
+    config=config,
+    output_bucket=output_bucket,
+    image_base=f"us-central1-docker.pkg.dev/{gcp_project}/cp2kci",
+)
 
 # ======================================================================================
 def main():
