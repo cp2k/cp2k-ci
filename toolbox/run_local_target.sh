@@ -42,7 +42,7 @@ START_DATE=$(date --utc --rfc-3339=seconds)
 echo "StartDate: ${START_DATE}" | tee -a "${REPORT}"
 
 CPUID=$(cpuid -1 | grep "(synth)" | cut -c14-)
-NUM_CPUS=$(cpuid | grep -c "(synth)")
+NUM_CPUS=$(grep -c processor /proc/cpuinfo)
 SMT_ACTIVE=$(cat /sys/devices/system/cpu/smt/active)
 MEMORY_LIMIT_MB="$((NUM_CPUS * 700))"  # ... ought to be enough for anybody.
 if [ "${SMT_ACTIVE}" != "1" ] ; then
