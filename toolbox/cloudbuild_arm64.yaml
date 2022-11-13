@@ -1,7 +1,7 @@
 # author: Ole Schuett
 
 # Since GCP Build does not offer ARM machines we have to run on QEMU, which is slow.
-timeout: 3600  # 1 hour
+timeout: "3600s"  # 1 hour
 
 substitutions:
   _IMAGE_NAME: "us-central1-docker.pkg.dev/${PROJECT_ID}/cp2kci/img_cp2kci_toolbox_arm64"

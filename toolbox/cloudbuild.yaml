@@ -1,6 +1,6 @@
 # author: Ole Schuett
 
-timeout: 900s
+timeout: "900s"  # 15 minutes
 
 substitutions:
   _IMAGE_NAME: "us-central1-docker.pkg.dev/${PROJECT_ID}/cp2kci/img_cp2kci_toolbox"
