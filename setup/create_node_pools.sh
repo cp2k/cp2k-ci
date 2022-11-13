@@ -35,6 +35,22 @@ gcloud container node-pools create pool-t2d-32 \
     --num-nodes=0 \
     --node-taints="costly=true:NoSchedule"
 
+# ARM machines are currently only available in a few zones:
+# https://cloud.google.com/kubernetes-engine/docs/concepts/arm-on-gke#arm-requirements-limitations
+# Note that the current quota for T2A_CPU is at 16.
+gcloud container node-pools create pool-t2a-16 \
+    --cluster="${CLUSTER_NAME}" \
+    --machine-type="t2a-standard-16" \
+    --spot \
+    --node-locations="us-central1-a" \
+    --enable-autoupgrade \
+    --enable-autorepair \
+    --enable-autoscaling \
+    --max-nodes=1 \
+    --min-nodes=0 \
+    --num-nodes=0 \
+    --node-taints="costly=true:NoSchedule"
+
 # There is no n1-standard-24 machine type.
 # Using custom type with same 3.75GB/vCPU ratio.
 gcloud container node-pools create pool-p4-skylake-24 \

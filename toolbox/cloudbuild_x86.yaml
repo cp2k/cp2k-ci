@@ -3,7 +3,7 @@
 timeout: "900s"  # 15 minutes
 
 substitutions:
-  _IMAGE_NAME: "us-central1-docker.pkg.dev/${PROJECT_ID}/cp2kci/img_cp2kci_toolbox"
+  _IMAGE_NAME: "us-central1-docker.pkg.dev/${PROJECT_ID}/cp2kci/img_cp2kci_toolbox_x86"
 
 steps:
 - name: 'gcr.io/cloud-builders/docker'
