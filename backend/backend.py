@@ -238,8 +238,11 @@ def process_pull_request(gh, pr_number, sender):
             break
     prev_conclusions = {}
     for prev_check_run in prev_check_runs:
-        _, target = parse_external_id(prev_check_run["external_id"])
-        prev_conclusions[target] = prev_check_run["conclusion"]
+        try:
+            _, target = parse_external_id(prev_check_run["external_id"])
+            prev_conclusions[target] = prev_check_run["conclusion"]
+        except:
+            print(f"Found unparsable external id: " + prev_check_run["external_id"])
 
     # cancel old jobs
     cancel_check_runs(target="*", gh=gh, pr=pr, sender=sender)
