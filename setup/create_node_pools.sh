@@ -13,6 +13,7 @@ for CPUS in 8 16 32 ; do
         --cluster="${CLUSTER_NAME}" \
         --machine-type="n2d-highcpu-${CPUS}" \
         --min-cpu-platform="AMD Milan" \
+        --disk-type="pd-ssd" \
         --spot \
         --enable-autoupgrade \
         --enable-autorepair \
@@ -26,6 +27,7 @@ done
 gcloud container node-pools create pool-t2d-32 \
     --cluster="${CLUSTER_NAME}" \
     --machine-type="t2d-standard-32" \
+    --disk-type="pd-ssd" \
     --spot \
     --enable-autoupgrade \
     --enable-autorepair \
@@ -41,6 +43,7 @@ gcloud container node-pools create pool-t2d-32 \
 gcloud container node-pools create pool-t2a-16 \
     --cluster="${CLUSTER_NAME}" \
     --machine-type="t2a-standard-16" \
+    --disk-type="pd-ssd" \
     --spot \
     --node-locations="us-central1-a" \
     --enable-autoupgrade \
@@ -58,6 +61,7 @@ gcloud container node-pools create pool-p4-skylake-24 \
        --machine-type="custom-24-92160" \
        --accelerator="type=nvidia-tesla-p4,count=1" \
        --min-cpu-platform="Intel Skylake" \
+       --disk-type="pd-ssd" \
        --spot \
        --enable-autoupgrade \
        --enable-autorepair \
@@ -74,6 +78,7 @@ gcloud container node-pools create pool-v100-skylake-12 \
        --machine-type="custom-12-46080" \
        --accelerator="type=nvidia-tesla-v100,count=1" \
        --min-cpu-platform="Intel Skylake" \
+       --disk-type="pd-ssd" \
        --spot \
        --enable-autoupgrade \
        --enable-autorepair \
