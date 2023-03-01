@@ -44,7 +44,7 @@ echo "StartDate: ${START_DATE}" | tee -a "${REPORT}"
 CPUID=$(cpuid -1 | grep "(synth)" | cut -c14-)
 NUM_CPUS=$(grep -c processor /proc/cpuinfo)
 SMT_ACTIVE=$(cat /sys/devices/system/cpu/smt/active)
-MEMORY_LIMIT_MB="$((NUM_CPUS * 700))"  # ... ought to be enough for anybody.
+MEMORY_LIMIT_MB="$((NUM_CPUS * 2048))"  # ... ought to be enough for anybody.
 if [ "${SMT_ACTIVE}" != "1" ] ; then
     MEMORY_LIMIT_MB="$((MEMORY_LIMIT_MB * 2))"
     CPUID="${CPUID} (SMT disabled)"
