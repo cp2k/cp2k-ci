@@ -44,9 +44,8 @@ echo "StartDate: ${START_DATE}" | tee -a "${REPORT}"
 CPUID=$(cpuid -1 | grep "(synth)" | cut -c14-)
 NUM_CPUS=$(grep -c processor /proc/cpuinfo)
 SMT_ACTIVE=$(cat /sys/devices/system/cpu/smt/active)
-MEMORY_LIMIT_MB="$((NUM_CPUS * 700))"  # ... ought to be enough for anybody.
+MEMORY_LIMIT_MB="$((NUM_CPUS * 3072))"  # ... ought to be enough for anybody.
 if [ "${SMT_ACTIVE}" != "1" ] ; then
-    MEMORY_LIMIT_MB="$((MEMORY_LIMIT_MB * 2))"
     CPUID="${CPUID} (SMT disabled)"
 fi
 echo "CpuId: ${NUM_CPUS}x ${CPUID}" | tee -a "${REPORT}"
@@ -55,7 +54,6 @@ if (( NUM_GPUS_REQUIRED > 0 )) ; then
     GPUID=$(nvidia-smi --query-gpu=gpu_name --format=csv | tail -n 1)
     NUM_GPUS=$(nvidia-smi --query-gpu=gpu_name --format=csv,noheader | wc -l)
     echo "GpuId: ${NUM_GPUS}x ${GPUID}" | tee -a "${REPORT}"
-    MEMORY_LIMIT_MB="$((MEMORY_LIMIT_MB * 4))"  # use a bit more for GPU runs
     if (( NUM_GPUS < NUM_GPUS_REQUIRED )) ; then
         echo -e "\\nNot enough GPUs found. Restarting..." | tee -a "${REPORT}"
         upload_final_report

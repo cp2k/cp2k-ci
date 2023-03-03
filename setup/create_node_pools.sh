@@ -6,13 +6,10 @@ CLUSTER_NAME="cp2k-cluster"
 
 set -x
 
-for CPUS in 8 16 32 ; do
-    #gcloud container node-pools delete --cluster="${CLUSTER_NAME}" --quiet pool-highcpu-${CPUS}-milan
-
-    gcloud container node-pools create pool-highcpu-${CPUS}-milan \
+for CPUS in 4 32 ; do
+    gcloud container node-pools create pool-t2d-${CPUS} \
         --cluster="${CLUSTER_NAME}" \
-        --machine-type="n2d-highcpu-${CPUS}" \
-        --min-cpu-platform="AMD Milan" \
+        --machine-type="t2d-standard-${CPUS}" \
         --disk-type="pd-ssd" \
         --spot \
         --enable-autoupgrade \
@@ -23,19 +20,6 @@ for CPUS in 8 16 32 ; do
         --num-nodes=0 \
         --node-taints="costly=true:NoSchedule"
 done
-
-gcloud container node-pools create pool-t2d-32 \
-    --cluster="${CLUSTER_NAME}" \
-    --machine-type="t2d-standard-32" \
-    --disk-type="pd-ssd" \
-    --spot \
-    --enable-autoupgrade \
-    --enable-autorepair \
-    --enable-autoscaling \
-    --max-nodes=1 \
-    --min-nodes=0 \
-    --num-nodes=0 \
-    --node-taints="costly=true:NoSchedule"
 
 # ARM machines are currently only available in a few zones:
 # https://cloud.google.com/kubernetes-engine/docs/concepts/arm-on-gke#arm-requirements-limitations
