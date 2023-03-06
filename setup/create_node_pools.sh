@@ -21,6 +21,20 @@ for CPUS in 4 32 ; do
         --node-taints="costly=true:NoSchedule"
 done
 
+# TODO: Checkout c3-standard-22 instances once they are generally available.
+gcloud container node-pools create pool-c2-30 \
+    --cluster="${CLUSTER_NAME}" \
+    --machine-type="c2-standard-30" \
+    --disk-type="pd-ssd" \
+    --spot \
+    --enable-autoupgrade \
+    --enable-autorepair \
+    --enable-autoscaling \
+    --max-nodes=4 \
+    --min-nodes=0 \
+    --num-nodes=0 \
+    --node-taints="costly=true:NoSchedule"
+
 # ARM machines are currently only available in a few zones:
 # https://cloud.google.com/kubernetes-engine/docs/concepts/arm-on-gke#arm-requirements-limitations
 # Note that the current quota for T2A_CPU is at 16.
