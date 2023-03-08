@@ -49,7 +49,7 @@ class GithubUtil:
 
     # --------------------------------------------------------------------------
     def age(self, created_at):
-        # TODO: Python 3.7 has datetime.fromisoformat().
+        # TODO: Python 3.11 has datetime.fromisoformat() with support for timezones.
         creation = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ")
         return datetime.utcnow() - creation
 
