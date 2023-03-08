@@ -36,18 +36,18 @@ usage_lines.append("\n")
 
 usage_lines.append("YEAR-MONTH              OK   ERR")
 usage_lines.append("--------------------------------")
-for month, count in sorted(ok_per_month.items(), key=lambda x:x[0]):
+for month, count in sorted(ok_per_month.items(), key=lambda x: x[0]):
     errors = err_per_month.get(month, 0)
-    bar = "x"*(count//10) + "-"*(errors//10)
+    bar = "x" * (count // 10) + "-" * (errors // 10)
     usage_lines.append("{:20s} {:5d} {:5d} {}".format(month, count, errors, bar))
 usage_lines.append("\n")
 
 usage_lines.append("TARGET                  OK   ERR")
 usage_lines.append("--------------------------------")
-for target, count in sorted(ok_per_target.items(), key=lambda x:-x[1]):
+for target, count in sorted(ok_per_target.items(), key=lambda x: -x[1]):
     errors = err_per_target.get(target, 0)
-    bar = "x"*(count//10) + "-"*(errors//10)
-    usage_lines .append("{:20s} {:5d} {:5d} {}".format(target, count, errors, bar))
+    bar = "x" * (count // 10) + "-" * (errors // 10)
+    usage_lines.append("{:20s} {:5d} {:5d} {}".format(target, count, errors, bar))
 usage_lines.append("\n")
 
 now = datetime.utcnow().replace(microsecond=0)
@@ -62,6 +62,6 @@ if sys.argv[-1] == "--upload":
     usage_stats_blob = output_bucket.blob("usage_stats.txt")
     usage_stats_blob.cache_control = "no-cache"
     usage_stats_blob.upload_from_string(usage_stats)
-    print("Uploaded to: "+ usage_stats_blob.public_url)
+    print("Uploaded to: " + usage_stats_blob.public_url)
 
-#EOF
+# EOF
