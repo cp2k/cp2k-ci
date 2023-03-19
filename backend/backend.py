@@ -6,18 +6,20 @@ import re
 import sys
 import json
 import traceback
-import configparser
 from time import sleep
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
-from typing import Any, Optional, Tuple, List, Literal, Union, TypedDict
+from typing import Any, Dict, Optional, Tuple, List, Literal, Union, TypedDict
 
+from target import Target, TargetName
+from repository_config import REPOSITORY_CONFIGS, get_repository_config_by_name
 from kubernetes_util import KubernetesUtil
 from github_util import (
     GithubUtil,
     Commit,
     PullRequest,
     CheckRun,
+    CheckRunExternalId,
     PullRequestNumber,
     GithubEvent,
 )
@@ -34,15 +36,11 @@ storage_client = google.cloud.storage.Client(project=gcp_project)
 subscriber_client = google.cloud.pubsub.SubscriberClient()
 output_bucket = storage_client.get_bucket("cp2k-ci")
 
-KNOWN_TAGS = ("required_check_run", "optional_check_run", "dashboard")
-config = configparser.ConfigParser()
-config.read("./cp2k-ci.conf")
-
 kubeutil = KubernetesUtil(
-    config=config,
     output_bucket=output_bucket,
     image_base=f"us-central1-docker.pkg.dev/{gcp_project}/cp2kci",
 )
+
 
 # TODO Share with frontend.py and cp2kcictl.py
 # ======================================================================================
@@ -50,51 +48,43 @@ class EchoRequest(TypedDict):
     rpc: Literal["echo"]
 
 
-# ======================================================================================
 class UpdateHealthzBeaconRequest(TypedDict):
     rpc: Literal["update_healthz_beacon"]
 
 
-# ======================================================================================
 class SubmitAllDashboardTestsRequest(TypedDict):
     rpc: Literal["submit_all_dashboard_tests"]
 
 
-# ======================================================================================
 class SubmitDashboardTestRequest(TypedDict):
     rpc: Literal["submit_dashboard_test"]
-    target: str
+    target: TargetName
 
 
-# ======================================================================================
 class SubmitDashboardTestForceRequest(TypedDict):
     rpc: Literal["submit_dashboard_test_force"]
-    target: str
+    target: TargetName
 
 
-# ======================================================================================
 class SubmitCheckRunRequest(TypedDict):
     rpc: Literal["submit_check_run"]
     repo: str
     pr_number: PullRequestNumber
-    target: str
+    target: TargetName
 
 
-# ======================================================================================
 class ProcessPullRequestRequest(TypedDict):
     rpc: Literal["process_pull_request"]
     repo: str
     pr_number: PullRequestNumber
 
 
-# ======================================================================================
 class GithubEventRequest(TypedDict):
     rpc: Literal["github_event"]
     event: str
     body: GithubEvent
 
 
-# ======================================================================================
 RpcRequest = Union[
     EchoRequest,
     UpdateHealthzBeaconRequest,
@@ -117,11 +107,6 @@ class Report:
 # ======================================================================================
 def main() -> None:
     print("starting")
-
-    # check config tags
-    for target in config.sections():
-        tags = config.get(target, "tags", fallback="").split()
-        assert all([t in KNOWN_TAGS for t in tags])
 
     # subscribe to pubsub
     sub_name = "projects/" + gcp_project + "/subscriptions/cp2kci-subscription"
@@ -178,35 +163,30 @@ def process_rpc(request: RpcRequest) -> None:
         process_github_event(request["event"], request["body"])
 
     elif request["rpc"] == "submit_all_dashboard_tests":
-        head_sha = GithubUtil("cp2k").get_master_head_sha()
-        for target in config.sections():
-            tags = config.get(target, "tags", fallback="").split()
-            if "dashboard" in tags:
-                submit_dashboard_test(target, head_sha)
+        gh = GithubUtil("cp2k")
+        head_sha = gh.get_master_head_sha()
+        for target in gh.get_targets():
+            submit_dashboard_test(target, head_sha)
 
     elif request["rpc"] == "submit_dashboard_test":
-        target = request["target"]
-        head_sha = GithubUtil("cp2k").get_master_head_sha()
-        submit_dashboard_test(target, head_sha)
+        gh = GithubUtil("cp2k")
+        target = gh.get_target_by_name(request["target"])
+        submit_dashboard_test(target, gh.get_master_head_sha())
 
     elif request["rpc"] == "submit_dashboard_test_force":
-        target = request["target"]
-        head_sha = GithubUtil("cp2k").get_master_head_sha()
-        submit_dashboard_test(target, head_sha, force=True)
+        gh = GithubUtil("cp2k")
+        target = gh.get_target_by_name(request["target"])
+        submit_dashboard_test(target, gh.get_master_head_sha(), force=True)
 
     elif request["rpc"] == "submit_check_run":
-        repo = request["repo"]
-        pr_number = request["pr_number"]
-        target = request["target"]
-        gh = GithubUtil(repo)
-        pr = gh.get_pull_request(pr_number)
+        gh = GithubUtil(request["repo"])
+        pr = gh.get_pull_request(request["pr_number"])
+        target = gh.get_target_by_name(request["target"], pr)
         submit_check_run(target, gh, pr, sender="_somebody_")
 
     elif request["rpc"] == "process_pull_request":
-        repo = request["repo"]
-        pr_number = request["pr_number"]
-        gh = GithubUtil(repo)
-        process_pull_request(gh, pr_number, sender="_somebody_")
+        gh = GithubUtil(request["repo"])
+        process_pull_request(gh, request["pr_number"], sender="_somebody_")
 
     else:
         print("Unknown RPC: " + request["rpc"])
@@ -218,16 +198,14 @@ def process_github_event(event: str, body: GithubEvent) -> None:
     print("Got github even: {} action: {}".format(event, action))
 
     if event == "pull_request" and action in ("opened", "synchronize"):
+        gh = GithubUtil(body["repository"]["name"])
         pr_number = body["number"]
-        repo = body["repository"]["name"]
-        gh = GithubUtil(repo)
         sender = body["sender"]["login"]
         process_pull_request(gh, pr_number, sender)
 
     elif event == "check_suite" and action == "rerequested":
         # snatch pr_number from existing check_runs
-        repo = body["repository"]["name"]
-        gh = GithubUtil(repo)
+        gh = GithubUtil(body["repository"]["name"])
         check_run_list = gh.get_check_runs(body["check_suite"]["check_runs_url"])
         ext_id = check_run_list["check_runs"][0]["external_id"]
         pr_number, _ = parse_external_id(ext_id)
@@ -236,25 +214,25 @@ def process_github_event(event: str, body: GithubEvent) -> None:
 
     elif event == "check_run" and action == "rerequested":
         ext_id = body["check_run"]["external_id"]
-        pr_number, target = parse_external_id(ext_id)
-        repo = body["repository"]["name"]
-        gh = GithubUtil(repo)
+        pr_number, target_name = parse_external_id(ext_id)
+        gh = GithubUtil(body["repository"]["name"])
         pr = gh.get_pull_request(pr_number)
+        target = gh.get_target_by_name(target_name, pr)
         sender = body["sender"]["login"]
         submit_check_run(target, gh, pr, sender)
 
     elif event == "check_run" and action == "requested_action":
         ext_id = body["check_run"]["external_id"]
-        pr_number, target = parse_external_id(ext_id)
+        pr_number, target_name = parse_external_id(ext_id)
         requested_action = body["requested_action"]["identifier"]
         sender = body["sender"]["login"]
-        repo = body["repository"]["name"]
-        gh = GithubUtil(repo)
+        gh = GithubUtil(body["repository"]["name"])
         pr = gh.get_pull_request(pr_number)
+        target = gh.get_target_by_name(target_name, pr)
         if requested_action == "run":
             submit_check_run(target, gh, pr, sender)
         elif requested_action == "cancel":
-            cancel_check_runs(target, gh, pr, sender)
+            cancel_check_runs(target.name, gh, pr, sender)
         else:
             print("Unknown requested action: {}".format(requested_action))
     else:
@@ -263,7 +241,10 @@ def process_github_event(event: str, body: GithubEvent) -> None:
 
 # ======================================================================================
 def await_mergeability(
-    gh: GithubUtil, pr: PullRequest, check_run_name: str, check_run_external_id: str
+    gh: GithubUtil,
+    pr: PullRequest,
+    check_run_name: str,
+    check_run_external_id: CheckRunExternalId,
 ) -> None:
     # https://developer.github.com/v3/git/#checking-mergeability-of-pull-requests
 
@@ -322,16 +303,16 @@ def process_pull_request(
         prev_check_runs = gh.get_check_runs(commit["url"] + "/check-runs")["check_runs"]
         if prev_check_runs:
             break
-    prev_conclusions = {}
+    prev_conclusions: Dict[TargetName, str] = {}
     for prev_check_run in prev_check_runs:
         try:
-            _, target = parse_external_id(prev_check_run["external_id"])
-            prev_conclusions[target] = prev_check_run["conclusion"]
+            _, target_name = parse_external_id(prev_check_run["external_id"])
+            prev_conclusions[target_name] = prev_check_run["conclusion"]
         except:
             print(f"Found unparsable external id: " + prev_check_run["external_id"])
 
     # cancel old jobs
-    cancel_check_runs(target="*", gh=gh, pr=pr, sender=sender)
+    cancel_check_runs(target_pattern="*", gh=gh, pr=pr, sender=sender)
 
     # check for merge commits
     if not check_git_history(gh, pr, commits):
@@ -339,15 +320,12 @@ def process_pull_request(
         return
 
     # submit check runs
-    for target in config.sections():
-        tags = config.get(target, "tags", fallback="").split()
-        if target in prev_conclusions:
-            optional = prev_conclusions[target] in ("neutral", "cancelled")
-            submit_check_run(target, gh, pr, sender, optional=optional)
-        elif "required_check_run" in tags:
-            submit_check_run(target, gh, pr, sender, optional=False)
-        elif "optional_check_run" in tags:
-            submit_check_run(target, gh, pr, sender, optional=True)
+    for target in gh.get_targets():
+        if target.name in prev_conclusions:
+            optional = prev_conclusions[target.name] in ("neutral", "cancelled")
+        else:
+            optional = not target.is_required_check
+        submit_check_run(target, gh, pr, sender, optional=optional)
 
 
 # ======================================================================================
@@ -381,24 +359,28 @@ def check_git_history(gh: GithubUtil, pr: PullRequest, commits: List[Commit]) ->
 
 
 # ======================================================================================
-def format_external_id(pr_number: int, target: str) -> str:
-    return "{};{}".format(pr_number, target)
+def format_external_id(
+    pr_number: PullRequestNumber, target_name: TargetName | Literal["git-history"]
+) -> CheckRunExternalId:
+    return CheckRunExternalId(f"{pr_number};{target_name}")
 
 
 # ======================================================================================
-def parse_external_id(ext_id: str) -> Tuple[PullRequestNumber, str]:
+def parse_external_id(
+    ext_id: CheckRunExternalId,
+) -> Tuple[PullRequestNumber, TargetName]:
     pr_number = PullRequestNumber(ext_id.split(";")[0])
-    target = ext_id.split(";")[1]
-    return pr_number, target
+    target_name = TargetName(ext_id.split(";")[1])
+    return pr_number, target_name
 
 
 # ======================================================================================
 def submit_check_run(
-    target: str, gh: GithubUtil, pr: PullRequest, sender: str, optional: bool = False
+    target: Target, gh: GithubUtil, pr: PullRequest, sender: str, optional: bool = False
 ) -> None:
     check_run: CheckRun = {
-        "name": config.get(target, "display_name"),
-        "external_id": format_external_id(pr["number"], target),
+        "name": target.display_name,
+        "external_id": format_external_id(pr["number"], target.name),
         "head_sha": pr["head"]["sha"],
         "started_at": gh.now(),
     }
@@ -436,7 +418,10 @@ def submit_check_run(
 
 # ======================================================================================
 def cancel_check_runs(
-    target: str, gh: GithubUtil, pr: PullRequest, sender: str
+    target_pattern: TargetName | Literal["*"],
+    gh: GithubUtil,
+    pr: PullRequest,
+    sender: str,
 ) -> None:
     run_job_list = kubeutil.list_jobs("cp2kci=run")
     for job in run_job_list.items:
@@ -447,7 +432,7 @@ def cancel_check_runs(
             continue
         if job_annotations["cp2kci-check-run-status"] != "in_progress":
             continue
-        if target != "*" and job_annotations["cp2kci-target"] != target:
+        if target_pattern not in ("*", job_annotations["cp2kci-target"]):
             continue
 
         # Ok found a matching job to cancel.
@@ -473,8 +458,8 @@ def cancel_check_runs(
 
 
 # ======================================================================================
-def submit_dashboard_test(target: str, head_sha: str, force: bool = False) -> None:
-    assert config.get(target, "repository") == "cp2k"
+def submit_dashboard_test(target: Target, head_sha: str, force: bool = False) -> None:
+    assert target.repository == "cp2k"
 
     if not force:
         # Check if a dashboard job for given target is already underway.
@@ -488,12 +473,12 @@ def submit_dashboard_test(target: str, head_sha: str, force: bool = False) -> No
                 print("Found already underway dashboard job for: {}.".format(target))
                 return  # Do not submit another job.
 
-        if get_dashboard_report_sha(target) == head_sha:
+        if get_dashboard_report_sha(target.name) == head_sha:
             print("Found up-to-date dashboard report for: {}.".format(target))
             return  # No need to submit another job.
 
-        if config.has_option(target, "cache_from"):
-            if get_dashboard_report_sha(config.get(target, "cache_from")) != head_sha:
+        if target.cache_from:
+            if get_dashboard_report_sha(target.cache_from) != head_sha:
                 print("Found stale cache_from dashboard report for: {}.".format(target))
                 return  # Won't submit a job without up-to-date cache_from image.
 
@@ -505,10 +490,9 @@ def submit_dashboard_test(target: str, head_sha: str, force: bool = False) -> No
 
 
 # ======================================================================================
-def get_dashboard_report_sha(target: str) -> Optional[str]:
-    assert config.get(target, "repository") == "cp2k"
-    assert target.startswith("cp2k-")
-    test_name = target[5:]
+def get_dashboard_report_sha(target_name: TargetName) -> Optional[str]:
+    assert target_name.startswith("cp2k-")
+    test_name = target_name[5:]
 
     # Downloading first 1kb of report should be enough to read CommitSHA.
     blob = output_bucket.get_blob("dashboard_" + test_name + "_report.txt")
@@ -532,9 +516,8 @@ def poll_pull_requests(job_list: V1JobList) -> None:
         if job.status.active and "cp2kci-check-run-url" in annotations:
             active_check_runs_urls.append(annotations["cp2kci-check-run-url"])
 
-    all_repos = set([config.get(t, "repository") for t in config.sections()])
-    for repo in all_repos:
-        gh = GithubUtil(repo)
+    for repo_config in REPOSITORY_CONFIGS:
+        gh = GithubUtil(repo_config.name)
         for pr in gh.iterate_pull_requests():
             if pr["base"]["ref"] != "master":
                 continue  # ignore non-master PR
@@ -589,12 +572,11 @@ def publish_job_to_dashboard(job: V1Job) -> None:
     if "cp2kci-dashboard-published" in job_annotations:
         return
 
-    target = job_annotations["cp2kci-target"]
-    print("Publishing {} to dashboard.".format(target))
+    target_name = job_annotations["cp2kci-target"]
+    print(f"Publishing {target_name} to dashboard.")
 
-    assert config.get(target, "repository") == "cp2k"
-    assert target.startswith("cp2k-")
-    test_name = target[5:]
+    assert target_name.startswith("cp2k-")
+    test_name = target_name[5:]
 
     src_blob = output_bucket.blob(job_annotations["cp2kci-report-path"])
     if src_blob.exists():
@@ -625,11 +607,10 @@ def publish_job_to_github(job: V1Job) -> None:
     if job_annotations["cp2kci-check-run-status"] == status:
         return  # Nothing to do - check_run already uptodate.
 
-    target = job_annotations["cp2kci-target"]
-    print("Publishing {} to Github.".format(target))
-    repo = config.get(target, "repository")
-    gh = GithubUtil(repo)
+    target_name = job_annotations["cp2kci-target"]
+    print(f"Publishing {target_name} to Github.")
 
+    gh = GithubUtil(job_annotations["cp2kci-repository"])
     report_blob = output_bucket.blob(job_annotations["cp2kci-report-path"])
     artifacts_blob = output_bucket.blob(job_annotations["cp2kci-artifacts-path"])
     check_run: CheckRun = {"status": status, "output": {}}

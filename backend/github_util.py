@@ -6,7 +6,11 @@ import requests
 from time import time, sleep
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Any, Dict, Iterator, List, Literal, TypedDict, cast
+from typing import Any, Dict, Iterator, List, Literal, Optional, TypedDict, cast
+from base64 import b64decode
+
+from target import Target, TargetName, parse_target_config
+from repository_config import RepositoryConfig, get_repository_config_by_name
 
 GITHUB_APP_ID = os.environ["GITHUB_APP_ID"]
 GITHUB_APP_KEY = Path(os.environ["GITHUB_APP_KEY"]).read_text()
@@ -38,9 +42,14 @@ class CheckRunAction(TypedDict, total=False):
 
 
 # ======================================================================================
+class CheckRunExternalId(str):
+    pass
+
+
+# ======================================================================================
 class CheckRun(TypedDict, total=False):
     name: str
-    external_id: str
+    external_id: CheckRunExternalId
     head_sha: CommitSha
     started_at: str
     status: str
@@ -117,15 +126,29 @@ class GithubEvent(TypedDict, total=False):
 
 # ======================================================================================
 class GithubUtil:
-    def __init__(self, repo: str):
-        self.repo = repo
-        self.repo_url = "https://api.github.com/repos/cp2k/" + repo
+    def __init__(self, repo_name: str):
+        self.repo_conf = get_repository_config_by_name(repo_name)
+        self.repo_url = f"https://api.github.com/repos/cp2k/{repo_name}"
         self.token = self.get_installation_token()
 
     # --------------------------------------------------------------------------
     def get_master_head_sha(self) -> str:
         # Get sha of latest git commit.
         return str(next(self.iterate_commits("/commits"))["sha"])
+
+    # --------------------------------------------------------------------------
+    def get_targets(self, pr: Optional[PullRequest] = None) -> List[Target]:
+        branch = f"pull/{pr['number']}/merge" if pr else "master"
+        resp = self._get(f"/contents/{self.repo_conf.targets_config}?ref={branch}")
+        return parse_target_config(self.repo_conf, b64decode(resp["content"]))
+
+    # --------------------------------------------------------------------------
+    def get_target_by_name(
+        self, target_name: TargetName, pr: Optional[PullRequest] = None
+    ) -> Target:
+        matches = [t for t in self.get_targets(pr) if t.name == target_name]
+        assert len(matches) == 1
+        return matches[0]
 
     # --------------------------------------------------------------------------
     def get_installation_token(self) -> str:
