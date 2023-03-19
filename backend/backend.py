@@ -9,13 +9,26 @@ import traceback
 import configparser
 from time import sleep
 from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from typing import Any, Optional, Tuple, List, Literal, Union
+from typing_extensions import TypedDict
 
-from github_util import GithubUtil
 from kubernetes_util import KubernetesUtil
+from github_util import (
+    GithubUtil,
+    Commit,
+    PullRequest,
+    CheckRun,
+    PullRequestNumber,
+    GithubEvent,
+)
 
-import google.auth
-import google.cloud.pubsub
-import google.cloud.storage
+from kubernetes.client.models.v1_job_list import V1JobList
+from kubernetes.client.models.v1_job import V1Job
+
+import google.auth  # type: ignore
+import google.cloud.pubsub  # type: ignore
+import google.cloud.storage  # type: ignore
 
 gcp_project = google.auth.default()[1]
 storage_client = google.cloud.storage.Client(project=gcp_project)
@@ -32,8 +45,78 @@ kubeutil = KubernetesUtil(
     image_base=f"us-central1-docker.pkg.dev/{gcp_project}/cp2kci",
 )
 
+# TODO Share with frontend.py and cp2kcictl.py
 # ======================================================================================
-def main():
+class EchoRequest(TypedDict):
+    rpc: Literal["echo"]
+
+
+# ======================================================================================
+class UpdateHealthzBeaconRequest(TypedDict):
+    rpc: Literal["update_healthz_beacon"]
+
+
+# ======================================================================================
+class SubmitAllDashboardTestsRequest(TypedDict):
+    rpc: Literal["submit_all_dashboard_tests"]
+
+
+# ======================================================================================
+class SubmitDashboardTestRequest(TypedDict):
+    rpc: Literal["submit_dashboard_test"]
+    target: str
+
+
+# ======================================================================================
+class SubmitDashboardTestForceRequest(TypedDict):
+    rpc: Literal["submit_dashboard_test_force"]
+    target: str
+
+
+# ======================================================================================
+class SubmitCheckRunRequest(TypedDict):
+    rpc: Literal["submit_check_run"]
+    repo: str
+    pr_number: PullRequestNumber
+    target: str
+
+
+# ======================================================================================
+class ProcessPullRequestRequest(TypedDict):
+    rpc: Literal["process_pull_request"]
+    repo: str
+    pr_number: PullRequestNumber
+
+
+# ======================================================================================
+class GithubEventRequest(TypedDict):
+    rpc: Literal["github_event"]
+    event: str
+    body: GithubEvent
+
+
+# ======================================================================================
+RpcRequest = Union[
+    EchoRequest,
+    UpdateHealthzBeaconRequest,
+    SubmitAllDashboardTestsRequest,
+    SubmitDashboardTestRequest,
+    SubmitDashboardTestForceRequest,
+    SubmitCheckRunRequest,
+    ProcessPullRequestRequest,
+    GithubEventRequest,
+]
+
+# ======================================================================================
+@dataclass
+class Report:
+    summary: str
+    status: str
+    git_sha: Optional[str]
+
+
+# ======================================================================================
+def main() -> None:
     print("starting")
 
     # check config tags
@@ -55,7 +138,7 @@ def main():
 
 
 # ======================================================================================
-def tick(cycle):
+def tick(cycle: int) -> None:
     run_job_list = kubeutil.list_jobs("cp2kci=run")
     if cycle % 30 == 0:  # every 2.5 minutes
         poll_pull_requests(run_job_list)
@@ -70,11 +153,10 @@ def tick(cycle):
 
 
 # ======================================================================================
-def process_pubsub_message(message):
+def process_pubsub_message(message: Any) -> None:
     try:
-        data = json.loads(message.data)
-        rpc = data.pop("rpc")
-        process_rpc(rpc, **data)
+        rpc = json.loads(message.data)
+        process_rpc(rpc)
         message.ack()  # ack late in case we get preempted in the middle
     except:
         print(traceback.format_exc())
@@ -82,57 +164,57 @@ def process_pubsub_message(message):
 
 
 # ======================================================================================
-def process_rpc(rpc, **args):
-    print("Got RPC: " + rpc)
+def process_rpc(request: RpcRequest) -> None:
+    print("Got RPC: " + request["rpc"])
 
-    if rpc == "echo":
-        print("Got args: ", args)
+    if request["rpc"] == "echo":
+        print("Got request: ", request)
 
-    elif rpc == "update_healthz_beacon":
+    elif request["rpc"] == "update_healthz_beacon":
         blob = output_bucket.blob("healthz_beacon.txt")
         blob.cache_control = "no-cache"
         blob.upload_from_string(datetime.utcnow().isoformat())
 
-    elif rpc == "github_event":
-        process_github_event(args["event"], args["body"])
+    elif request["rpc"] == "github_event":
+        process_github_event(request["event"], request["body"])
 
-    elif rpc == "submit_all_dashboard_tests":
+    elif request["rpc"] == "submit_all_dashboard_tests":
         head_sha = GithubUtil("cp2k").get_master_head_sha()
         for target in config.sections():
             tags = config.get(target, "tags", fallback="").split()
             if "dashboard" in tags:
                 submit_dashboard_test(target, head_sha)
 
-    elif rpc == "submit_dashboard_test":
-        target = args["target"]
+    elif request["rpc"] == "submit_dashboard_test":
+        target = request["target"]
         head_sha = GithubUtil("cp2k").get_master_head_sha()
         submit_dashboard_test(target, head_sha)
 
-    elif rpc == "submit_dashboard_test_force":
-        target = args["target"]
+    elif request["rpc"] == "submit_dashboard_test_force":
+        target = request["target"]
         head_sha = GithubUtil("cp2k").get_master_head_sha()
         submit_dashboard_test(target, head_sha, force=True)
 
-    elif rpc == "submit_check_run":
-        repo = args["repo"]
-        pr_number = args["pr_number"]
-        target = args["target"]
+    elif request["rpc"] == "submit_check_run":
+        repo = request["repo"]
+        pr_number = request["pr_number"]
+        target = request["target"]
         gh = GithubUtil(repo)
-        pr = gh.get("/pulls/{}".format(pr_number))
+        pr = gh.get_pull_request(pr_number)
         submit_check_run(target, gh, pr, sender="_somebody_")
 
-    elif rpc == "process_pull_request":
-        repo = args["repo"]
-        pr_number = args["pr_number"]
+    elif request["rpc"] == "process_pull_request":
+        repo = request["repo"]
+        pr_number = request["pr_number"]
         gh = GithubUtil(repo)
         process_pull_request(gh, pr_number, sender="_somebody_")
 
     else:
-        print("Unknown RPC: " + rpc)
+        print("Unknown RPC: " + request["rpc"])
 
 
 # ======================================================================================
-def process_github_event(event, body):
+def process_github_event(event: str, body: GithubEvent) -> None:
     action = body.get("action", "")
     print("Got github even: {} action: {}".format(event, action))
 
@@ -147,7 +229,7 @@ def process_github_event(event, body):
         # snatch pr_number from existing check_runs
         repo = body["repository"]["name"]
         gh = GithubUtil(repo)
-        check_run_list = gh.get(body["check_suite"]["check_runs_url"])
+        check_run_list = gh.get_check_runs(body["check_suite"]["check_runs_url"])
         ext_id = check_run_list["check_runs"][0]["external_id"]
         pr_number, _ = parse_external_id(ext_id)
         sender = body["sender"]["login"]
@@ -158,7 +240,7 @@ def process_github_event(event, body):
         pr_number, target = parse_external_id(ext_id)
         repo = body["repository"]["name"]
         gh = GithubUtil(repo)
-        pr = gh.get("/pulls/{}".format(pr_number))
+        pr = gh.get_pull_request(pr_number)
         sender = body["sender"]["login"]
         submit_check_run(target, gh, pr, sender)
 
@@ -169,7 +251,7 @@ def process_github_event(event, body):
         sender = body["sender"]["login"]
         repo = body["repository"]["name"]
         gh = GithubUtil(repo)
-        pr = gh.get("/pulls/{}".format(pr_number))
+        pr = gh.get_pull_request(pr_number)
         if requested_action == "run":
             submit_check_run(target, gh, pr, sender)
         elif requested_action == "cancel":
@@ -181,15 +263,19 @@ def process_github_event(event, body):
 
 
 # ======================================================================================
-def await_mergeability(gh, pr, check_run_name, check_run_external_id):
+def await_mergeability(
+    gh: GithubUtil, pr: PullRequest, check_run_name: str, check_run_external_id: str
+) -> None:
     # https://developer.github.com/v3/git/#checking-mergeability-of-pull-requests
+
+    check_run: CheckRun
 
     for i in range(10):
         if pr["mergeable"] is not None and not pr["mergeable"]:
             return  # not mergeable
         elif pr["mergeable"] is not None and pr["mergeable"]:
             # Check freshness of merge branch.
-            merge_commit = gh.get("/commits/{}".format(pr["merge_commit_sha"]))
+            merge_commit = gh.get_commit(pr["merge_commit_sha"])
             if any(p["sha"] == pr["head"]["sha"] for p in merge_commit["parents"]):
                 return  # mergeable
 
@@ -202,38 +288,39 @@ def await_mergeability(gh, pr, check_run_name, check_run_external_id):
                 "started_at": gh.now(),
                 "output": {"title": "Waiting for mergeability check", "summary": ""},
             }
-            gh.post("/check-runs", check_run)
+            gh.post_check_run(check_run)
 
         # Reload pull request.
         pr_number = pr["number"]
         print("Waiting for mergeability check of PR {}".format(pr_number))
         sleep(5)
-        pr.clear()
-        pr.update(gh.get("/pulls/{}".format(pr_number)))
+        pr = gh.get_pull_request(pr_number)
 
     # timeout
-    check_run["completed_at"]: gh.now()
+    check_run["completed_at"] = gh.now()
     check_run["conclusion"] = "failure"
     check_run["output"] = {"title": "Mergeability check timeout.", "summary": ""}
-    gh.post("/check-runs", check_run)
+    gh.post_check_run(check_run)
     raise Exception("Mergeability check timeout on PR {}".format(pr_number))
 
 
 # ======================================================================================
-def process_pull_request(gh, pr_number, sender):
-    pr = gh.get("/pulls/{}".format(pr_number))
+def process_pull_request(
+    gh: GithubUtil, pr_number: PullRequestNumber, sender: str
+) -> None:
+    pr: PullRequest = gh.get_pull_request(pr_number)
 
     # check branch
     if pr["base"]["ref"] != "master":
         print("Ignoring PR for non-master branch: " + pr["base"]["ref"])
         return
 
-    commits = list(gh.iterate(pr["commits_url"]))
+    commits = list(gh.iterate_commits(pr["commits_url"]))
 
     # Find previous check run conclusions, before we call cancel on them.
     prev_check_runs = []
     for commit in reversed(commits):
-        prev_check_runs = gh.get(commit["url"] + "/check-runs")["check_runs"]
+        prev_check_runs = gh.get_check_runs(commit["url"] + "/check-runs")["check_runs"]
         if prev_check_runs:
             break
     prev_conclusions = {}
@@ -265,8 +352,8 @@ def process_pull_request(gh, pr_number, sender):
 
 
 # ======================================================================================
-def check_git_history(gh, pr, commits):
-    check_run = {
+def check_git_history(gh: GithubUtil, pr: PullRequest, commits: List[Commit]) -> bool:
+    check_run: CheckRun = {
         "name": "Git History",
         "external_id": format_external_id(pr["number"], "git-history"),
         "head_sha": pr["head"]["sha"],
@@ -290,24 +377,27 @@ def check_git_history(gh, pr, commits):
         check_run["conclusion"] = "success"
         check_run["output"] = {"title": "Git history is fine.", "summary": ""}
 
-    gh.post("/check-runs", check_run)
+    gh.post_check_run(check_run)
     return check_run["conclusion"] == "success"
 
 
 # ======================================================================================
-def format_external_id(pr_number, target):
+def format_external_id(pr_number: int, target: str) -> str:
     return "{};{}".format(pr_number, target)
 
 
-def parse_external_id(ext_id):
-    pr_number = int(ext_id.split(";")[0])
+# ======================================================================================
+def parse_external_id(ext_id: str) -> Tuple[PullRequestNumber, str]:
+    pr_number = PullRequestNumber(ext_id.split(";")[0])
     target = ext_id.split(";")[1]
     return pr_number, target
 
 
 # ======================================================================================
-def submit_check_run(target, gh, pr, sender, optional=False):
-    check_run = {
+def submit_check_run(
+    target: str, gh: GithubUtil, pr: PullRequest, sender: str, optional: bool = False
+) -> None:
+    check_run: CheckRun = {
         "name": config.get(target, "display_name"),
         "external_id": format_external_id(pr["number"], target),
         "head_sha": pr["head"]["sha"],
@@ -325,12 +415,12 @@ def submit_check_run(target, gh, pr, sender, optional=False):
                 "description": "Trigger test run.",
             }
         ]
-        gh.post("/check-runs", check_run)
+        gh.post_check_run(check_run)
         return
 
     # Let's submit the job.
     await_mergeability(gh, pr, check_run["name"], check_run["external_id"])
-    check_run = gh.post("/check-runs", check_run)
+    check_run = gh.post_check_run(check_run)
     job_annotations = {
         "cp2kci-sender": sender,
         "cp2kci-pull-request-number": str(pr["number"]),
@@ -346,7 +436,9 @@ def submit_check_run(target, gh, pr, sender, optional=False):
 
 
 # ======================================================================================
-def cancel_check_runs(target, gh, pr, sender):
+def cancel_check_runs(
+    target: str, gh: GithubUtil, pr: PullRequest, sender: str
+) -> None:
     run_job_list = kubeutil.list_jobs("cp2kci=run")
     for job in run_job_list.items:
         job_annotations = job.metadata.annotations
@@ -363,7 +455,8 @@ def cancel_check_runs(target, gh, pr, sender):
         print("Canceling job {}.".format(job.metadata.name))
         summary = "[Partial Report]({})".format(job_annotations["cp2kci-report-url"])
         summary += "\n\nCancelled by @{}.".format(sender)
-        check_run = {
+        check_run: CheckRun = {
+            "url": job_annotations["cp2kci-check-run-url"],
             "status": "completed",
             "conclusion": "cancelled",
             "completed_at": gh.now(),
@@ -376,12 +469,12 @@ def cancel_check_runs(target, gh, pr, sender):
                 }
             ],
         }
-        gh.patch(job_annotations["cp2kci-check-run-url"], check_run)
+        gh.patch_check_run(check_run)
         kubeutil.delete_job(job.metadata.name)
 
 
 # ======================================================================================
-def submit_dashboard_test(target, head_sha, force=False):
+def submit_dashboard_test(target: str, head_sha: str, force: bool = False) -> None:
     assert config.get(target, "repository") == "cp2k"
 
     if not force:
@@ -413,7 +506,7 @@ def submit_dashboard_test(target, head_sha, force=False):
 
 
 # ======================================================================================
-def get_dashboard_report_sha(target):
+def get_dashboard_report_sha(target: str) -> Optional[str]:
     assert config.get(target, "repository") == "cp2k"
     assert target.startswith("cp2k-")
     test_name = target[5:]
@@ -425,13 +518,13 @@ def get_dashboard_report_sha(target):
         report = blob.download_as_string(end=1024).decode("utf8", errors="replace")
         m = re.search("(^|\n)CommitSHA: (\w{40})\n", report)
         if m:
-            return m.group(2)
+            return str(m.group(2))
 
     return None  # CommitSHA not found.
 
 
 # ======================================================================================
-def poll_pull_requests(job_list):
+def poll_pull_requests(job_list: V1JobList) -> None:
     """A save guard in case we're missing a callback or loosing BatchJob"""
 
     active_check_runs_urls = []
@@ -443,12 +536,12 @@ def poll_pull_requests(job_list):
     all_repos = set([config.get(t, "repository") for t in config.sections()])
     for repo in all_repos:
         gh = GithubUtil(repo)
-        for pr in gh.iterate("/pulls"):
+        for pr in gh.iterate_pull_requests():
             if pr["base"]["ref"] != "master":
                 continue  # ignore non-master PR
             head_sha = pr["head"]["sha"]
 
-            check_run_list = gh.get("/commits/{}/check-runs".format(head_sha))
+            check_run_list = gh.get_check_runs(f"/commits/{head_sha}/check-runs")
             for check_run in check_run_list["check_runs"]:
                 if check_run["status"] == "completed":
                     continue  # Good, check_run is completed.
@@ -480,7 +573,7 @@ def poll_pull_requests(job_list):
                         "description": "Trigger test run.",
                     }
                 ]
-                gh.patch(check_run["url"], check_run)
+                gh.patch_check_run(check_run)
 
             pr_is_old = gh.age(pr["created_at"]) > timedelta(minutes=3)
             if pr_is_old and check_run_list["total_count"] == 0:
@@ -489,7 +582,7 @@ def poll_pull_requests(job_list):
 
 
 # ======================================================================================
-def publish_job_to_dashboard(job):
+def publish_job_to_dashboard(job: V1Job) -> None:
     job_annotations = job.metadata.annotations
     if job.status.completion_time is None:
         return
@@ -520,7 +613,7 @@ def publish_job_to_dashboard(job):
 
 
 # ======================================================================================
-def publish_job_to_github(job):
+def publish_job_to_github(job: V1Job) -> None:
     status = "queued"
     if job.status.active:
         status = "in_progress"
@@ -540,12 +633,12 @@ def publish_job_to_github(job):
 
     report_blob = output_bucket.blob(job_annotations["cp2kci-report-path"])
     artifacts_blob = output_bucket.blob(job_annotations["cp2kci-artifacts-path"])
-    check_run = {"status": status, "output": {}}
+    check_run: CheckRun = {"status": status, "output": {}}
     if status == "completed":
         report = parse_report(report_blob)
-        check_run["conclusion"] = "success" if report["status"] == "OK" else "failure"
+        check_run["conclusion"] = "success" if report.status == "OK" else "failure"
         check_run["completed_at"] = gh.now()
-        check_run["output"]["title"] = report["summary"]
+        check_run["output"]["title"] = report.summary
         summary = "[Detailed Report]({})".format(report_blob.public_url)
         if artifacts_blob.exists():
             summary += "\n\n[Artifacts]({})".format(artifacts_blob.public_url)
@@ -565,8 +658,8 @@ def publish_job_to_github(job):
     check_run["output"]["summary"] = summary
 
     # update check_run
-    print(check_run)
-    gh.patch(job_annotations["cp2kci-check-run-url"], check_run)
+    check_run["url"] = job_annotations["cp2kci-check-run-url"]
+    gh.patch_check_run(check_run)
 
     # update job_annotations
     job_annotations["cp2kci-check-run-status"] = status
@@ -574,21 +667,16 @@ def publish_job_to_github(job):
 
 
 # ======================================================================================
-def parse_report(report_blob):
-    report = {"status": "UNKNOWN", "summary": "", "git-sha": None}
+def parse_report(report_blob: Any) -> Report:
+    report = Report(status="UNKNOWN", summary="", git_sha=None)
     try:
-        report["summary"] = "Error while retrieving report."
         report_txt = report_blob.download_as_string().decode("utf8")
-
-        report["summary"] = "Error while parsing report."
-        report["summary"] = re.findall("(^|\n|\r)Summary: (.+?)[\n\r]", report_txt)[-1][
-            1
-        ]
-        report["status"] = re.findall("(^|\n|\r)Status: (.+?)[\n\r]", report_txt)[-1][1]
-        report["git-sha"] = re.search(
-            "(^|\n|\r)CommitSHA: (\w{40})[\n\r]", report_txt
-        ).group(2)
+        report.summary = re.findall("(^|\n|\r)Summary: (.+?)[\n\r]", report_txt)[-1][1]
+        report.status = re.findall("(^|\n|\r)Status: (.+?)[\n\r]", report_txt)[-1][1]
+        report.git_sha = re.findall("(^|\n|\r)CommitSHA: (.+?)[\n\r]", report_txt)[0][1]
+        assert report.git_sha and len(report.git_sha) == 40
     except:
+        report.summary = "Error while retrieving report."
         print(traceback.format_exc())
 
     return report

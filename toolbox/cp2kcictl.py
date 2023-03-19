@@ -4,15 +4,17 @@
 
 import sys
 import json
-import google.auth
-import google.cloud.pubsub
+from typing import Any
+
+import google.auth  # type: ignore
+import google.cloud.pubsub  # type: ignore
 
 project = google.auth.default()[1]
 publish_client = google.cloud.pubsub.PublisherClient()
 pubsub_topic = "projects/" + project + "/topics/cp2kci-topic"
 
 # ======================================================================================
-def main():
+def main() -> None:
     if len(sys.argv) < 2:
         print_usage()
 
@@ -45,7 +47,7 @@ def main():
 
 
 # ======================================================================================
-def print_usage():
+def print_usage() -> None:
     print("Usage: cp2kcictl.py [ submit_check_run <repo> <pr_number> <target> |")
     print("                      process_pull_request <repo> <pr_number> |")
     print("                      submit_dashboard_test <target> |")
@@ -55,7 +57,7 @@ def print_usage():
 
 
 # ======================================================================================
-def message_backend(**args):
+def message_backend(**args: Any) -> None:
     data = json.dumps(args).encode("utf8")
     future = publish_client.publish(pubsub_topic, data)
     message_id = future.result()

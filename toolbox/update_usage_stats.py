@@ -4,17 +4,20 @@
 
 import sys
 from datetime import datetime
-import google.auth
-import google.cloud.storage
+from typing import Dict
+
+import google.auth  # type: ignore
+import google.cloud.storage  # type: ignore
 
 gcp_project = google.auth.default()[1]
 storage_client = google.cloud.storage.Client(project=gcp_project)
 output_bucket = storage_client.get_bucket("cp2k-ci")
 
-ok_per_target = dict()
-ok_per_month = dict()
-err_per_target = dict()
-err_per_month = dict()
+Stats = Dict[str, int]
+ok_per_target: Stats = dict()
+ok_per_month: Stats = dict()
+err_per_target: Stats = dict()
+err_per_month: Stats = dict()
 
 report_iterator = output_bucket.list_blobs(prefix="run-")
 for page in report_iterator.pages:

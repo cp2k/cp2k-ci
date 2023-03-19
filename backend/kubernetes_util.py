@@ -1,12 +1,26 @@
 # author: Ole Schuett
 
-import kubernetes
+
+from configparser import ConfigParser
 from uuid import uuid4
 from datetime import datetime, timedelta
+from typing import Any, Dict, Optional, cast
+
+import kubernetes.config
+import kubernetes.client
+from kubernetes.client.models.v1_resource_requirements import V1ResourceRequirements
+from kubernetes.client.models.v1_affinity import V1Affinity
+from kubernetes.client.models.v1_job_list import V1JobList
 
 
 class KubernetesUtil:
-    def __init__(self, config, output_bucket, image_base, namespace="default"):
+    def __init__(
+        self,
+        config: ConfigParser,
+        output_bucket: Any,
+        image_base: str,
+        namespace: str = "default",
+    ):
         try:
             kubernetes.config.load_kube_config()
         except Exception:
@@ -20,37 +34,42 @@ class KubernetesUtil:
         self.batch_api = kubernetes.client.BatchV1Api()
 
     # --------------------------------------------------------------------------
-    def get_upload_url(self, path, content_type="text/plain;charset=utf-8"):
+    def get_upload_url(
+        self, path: str, content_type: str = "text/plain;charset=utf-8"
+    ) -> str:
         expiration = datetime.utcnow() + timedelta(hours=12)
         blob = self.output_bucket.blob(path)
         upload_url = blob.generate_signed_url(
             expiration, method="PUT", content_type=content_type
         )
-        return upload_url
+        return str(upload_url)
 
     # --------------------------------------------------------------------------
-    def list_jobs(self, selector):
-        return self.batch_api.list_namespaced_job(
+    def list_jobs(self, selector: str) -> V1JobList:
+        job_list = self.batch_api.list_namespaced_job(
             self.namespace, label_selector=selector, _request_timeout=self.timeout
-        )
+        )  # type: ignore
+        return cast(V1JobList, job_list)
 
     # --------------------------------------------------------------------------
-    def delete_job(self, job_name):
+    def delete_job(self, job_name: str) -> None:
         print("deleting job: " + job_name)
         self.batch_api.delete_namespaced_job(
             job_name,
             self.namespace,
             propagation_policy="Background",
             _request_timeout=self.timeout,
-        )
+        )  # type: ignore
 
     # --------------------------------------------------------------------------
-    def patch_job_annotations(self, job_name, new_annotations):
+    def patch_job_annotations(
+        self, job_name: str, new_annotations: Dict[str, str]
+    ) -> None:
         new_job_metadata = self.api.V1ObjectMeta(annotations=new_annotations)
         new_job = self.api.V1Job(metadata=new_job_metadata)
         self.batch_api.patch_namespaced_job(
             job_name, self.namespace, new_job, _request_timeout=self.timeout
-        )
+        )  # type: ignore
 
         # also update annotations of report_blob
         report_blob = self.output_bucket.blob(new_annotations["cp2kci-report-path"])
@@ -59,16 +78,16 @@ class KubernetesUtil:
             report_blob.patch()
 
     # --------------------------------------------------------------------------
-    def resources(self, target):
+    def resources(self, target: str) -> V1ResourceRequirements:
         cpu = self.config.getfloat(target, "cpu")
         gpu = self.config.getfloat(target, "gpu", fallback=0)
         req_cpu = 0.95 * cpu  # Request 5% less to leave some for kubernetes.
         return self.api.V1ResourceRequirements(
-            requests={"cpu": req_cpu}, limits={"nvidia.com/gpu": gpu}
+            requests={"cpu": str(req_cpu)}, limits={"nvidia.com/gpu": str(gpu)}
         )
 
     # --------------------------------------------------------------------------
-    def affinity(self, target):
+    def affinity(self, target: str) -> V1Affinity:
         nodepools = self.config.get(target, "nodepools").split()
         requirement = self.api.V1NodeSelectorRequirement(
             key="cloud.google.com/gke-nodepool", operator="In", values=nodepools
@@ -81,7 +100,14 @@ class KubernetesUtil:
         return self.api.V1Affinity(node_affinity=node_affinity)
 
     # --------------------------------------------------------------------------
-    def submit_run(self, target, git_branch, git_ref, job_annotations, priority=None):
+    def submit_run(
+        self,
+        target: str,
+        git_branch: str,
+        git_ref: str,
+        job_annotations: Dict[str, str],
+        priority: Optional[str] = None,
+    ) -> None:
         print("Submitting run for target: {}.".format(target))
 
         job_name = "run-" + target + "-" + str(uuid4())[:8]
@@ -219,7 +245,7 @@ class KubernetesUtil:
         job = self.api.V1Job(spec=job_spec, metadata=job_metadata)
         self.batch_api.create_namespaced_job(
             self.namespace, body=job, _request_timeout=self.timeout
-        )
+        )  # type: ignore
 
 
 # EOF

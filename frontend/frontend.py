@@ -8,9 +8,10 @@ import hmac
 import hashlib
 import logging
 from flask import Flask, request, abort
+from typing import Any
 
-import google.auth
-import google.cloud.pubsub
+import google.auth  # type: ignore
+import google.cloud.pubsub  # type: ignore
 
 publish_client = google.cloud.pubsub.PublisherClient()
 
@@ -23,17 +24,17 @@ pubsub_topic = "projects/" + project + "/topics/cp2kci-topic"
 
 app.logger.info("CP2K-CI frontend is up and running :-)")
 
-# ===================================================================================================
+# ======================================================================================
 @app.route("/health")
-def healthz():
+def healthz() -> str:
     # TODO: find a way to return queue size or some other end-to-end health metric.
     message_backend(rpc="update_healthz_beacon")
     return "I feel good :-)"
 
 
-# ===================================================================================================
+# ======================================================================================
 @app.route("/github_app_webhook", methods=["POST"])
-def github_app_webhook():
+def github_app_webhook() -> str:
     # check signature
     ext_signature = request.headers["X-Hub-Signature"]
     secret = app.config["GITHUB_WEBHOOK_SECRET"].encode("utf8")
@@ -51,14 +52,14 @@ def github_app_webhook():
     return "Ok - queued backend task."
 
 
-# ===================================================================================================
-def message_backend(**args):
+# ======================================================================================
+def message_backend(**args: Any) -> None:
     data = json.dumps(args).encode("utf8")
     future = publish_client.publish(pubsub_topic, data)
     future.result()
 
 
-# ===================================================================================================
+# ======================================================================================
 if __name__ == "__main__":
     app.run()
 
