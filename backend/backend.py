@@ -10,8 +10,7 @@ import configparser
 from time import sleep
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
-from typing import Any, Optional, Tuple, List, Literal, Union
-from typing_extensions import TypedDict
+from typing import Any, Optional, Tuple, List, Literal, Union, TypedDict
 
 from kubernetes_util import KubernetesUtil
 from github_util import (

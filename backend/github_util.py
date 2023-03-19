@@ -6,8 +6,7 @@ import requests
 from time import time, sleep
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Any, Dict, Iterator, List, Literal, cast
-from typing_extensions import TypedDict
+from typing import Any, Dict, Iterator, List, Literal, TypedDict, cast
 
 GITHUB_APP_ID = os.environ["GITHUB_APP_ID"]
 GITHUB_APP_KEY = Path(os.environ["GITHUB_APP_KEY"]).read_text()
