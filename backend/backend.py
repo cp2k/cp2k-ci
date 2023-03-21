@@ -437,6 +437,7 @@ def submit_check_run(
         git_branch,
         pr["merge_commit_sha"],
         job_annotations,
+        use_cache=use_cache,
         priority="high-priority",
     )
 
