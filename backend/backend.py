@@ -19,6 +19,7 @@ from github_util import (
     Commit,
     PullRequest,
     CheckRun,
+    CheckRunAction,
     CheckRunExternalId,
     PullRequestNumber,
     GithubEvent,
@@ -471,18 +472,7 @@ def cancel_check_runs(
             "conclusion": "cancelled",
             "completed_at": gh.now(),
             "output": {"title": "Cancelled", "summary": summary},
-            "actions": [
-                {
-                    "label": "Restart",
-                    "identifier": "run",
-                    "description": "Trigger test run.",
-                },
-                {
-                    "label": "Restart w/o Cache",
-                    "identifier": "run_nocache",
-                    "description": "Trigger test run without build cache.",
-                },
-            ],
+            "actions": build_restart_actions(),
         }
         gh.patch_check_run(check_run)
         kubeutil.delete_job(job.metadata.name)
@@ -625,6 +615,22 @@ def publish_job_to_dashboard(job: V1Job) -> None:
 
 
 # ======================================================================================
+def build_restart_actions() -> List[CheckRunAction]:
+    return [
+        {
+            "label": "Restart",
+            "identifier": "run",
+            "description": "Trigger test run.",
+        },
+        {
+            "label": "Restart w/o Cache",
+            "identifier": "run_nocache",
+            "description": "Trigger test run without build cache.",
+        },
+    ]
+
+
+# ======================================================================================
 def publish_job_to_github(job: V1Job) -> None:
     status = "queued"
     if job.status.active:
@@ -649,6 +655,7 @@ def publish_job_to_github(job: V1Job) -> None:
         report = parse_report(report_blob)
         check_run["conclusion"] = "success" if report.status == "OK" else "failure"
         check_run["completed_at"] = gh.now()
+        check_run["actions"] = build_restart_actions()
         check_run["output"]["title"] = report.summary
         summary = "[Detailed Report]({})".format(report_blob.public_url)
         if artifacts_blob.exists():
