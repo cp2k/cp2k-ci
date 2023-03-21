@@ -6,7 +6,7 @@
 set -o pipefail
 
 # Check input.
-for key in TARGET DOCKERFILE BUILD_ARGS BUILD_PATH CACHE_FROM NUM_GPUS_REQUIRED GIT_REPO GIT_BRANCH GIT_REF REPORT_UPLOAD_URL ARTIFACTS_UPLOAD_URL ; do
+for key in TARGET DOCKERFILE BUILD_ARGS BUILD_PATH USE_CACHE CACHE_FROM NUM_GPUS_REQUIRED GIT_REPO GIT_BRANCH GIT_REF REPORT_UPLOAD_URL ARTIFACTS_UPLOAD_URL ; do
     value="$(eval echo \$${key})"
     echo "${key}=\"${value}\""
 done
@@ -79,6 +79,10 @@ PROJECT=$(gcloud config list --format 'value(core.project)')
 PROJECT=${PROJECT:-"cp2k-org-project"}
 DOCKER_REPO="us-central1-docker.pkg.dev/${PROJECT}/cp2kci"
 
+target_image="${DOCKER_REPO}/img_${TARGET}"
+cache_image="${DOCKER_REPO}/img_${CACHE_FROM}"
+branch="${GIT_BRANCH//\//-}"
+
 # Update git repo which contains the Dockerfiles.
 cd "/workspace/${GIT_REPO}" || exit
 git fetch origin "${GIT_BRANCH}"
@@ -92,18 +96,16 @@ git submodule update --init --recursive
 git --no-pager log -1 --pretty='%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: %an%nCommitSubject: %s%n' |& tee -a "${REPORT}"
 
 if [ "${USE_CACHE}" == "yes" ] ; then
-    # Pull existing docker images.
     echo -en "Populating docker build cache... " | tee -a "${REPORT}"
     echo ""
-    target_image="${DOCKER_REPO}/img_${TARGET}"
-    cache_image="${DOCKER_REPO}/img_${CACHE_FROM}"
-    branch="${GIT_BRANCH//\//-}"
     docker image pull --quiet "${target_image}:${branch}"
     docker image pull --quiet "${target_image}:master"
     if [ "${CACHE_FROM}" != "" ] ; then
         docker image pull --quiet "${cache_image}:master"
     fi
     echo "done." >> "${REPORT}"
+else
+    echo "Proceeding without docker build cache." | tee -a "${REPORT}"
 fi
 
 echo -e "\\n#################### Building Image ${TARGET} ####################" | tee -a "${REPORT}"
