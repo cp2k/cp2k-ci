@@ -91,18 +91,20 @@ fi
 git submodule update --init --recursive
 git --no-pager log -1 --pretty='%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: %an%nCommitSubject: %s%n' |& tee -a "${REPORT}"
 
-# Pull existing docker images.
-echo -en "Populating docker build cache... " | tee -a "${REPORT}"
-echo ""
-target_image="${DOCKER_REPO}/img_${TARGET}"
-cache_image="${DOCKER_REPO}/img_${CACHE_FROM}"
-branch="${GIT_BRANCH//\//-}"
-docker image pull --quiet "${target_image}:${branch}"
-docker image pull --quiet "${target_image}:master"
-if [ "${CACHE_FROM}" != "" ] ; then
-    docker image pull --quiet "${cache_image}:master"
+if [ "${USE_CACHE}" == "yes" ] ; then
+    # Pull existing docker images.
+    echo -en "Populating docker build cache... " | tee -a "${REPORT}"
+    echo ""
+    target_image="${DOCKER_REPO}/img_${TARGET}"
+    cache_image="${DOCKER_REPO}/img_${CACHE_FROM}"
+    branch="${GIT_BRANCH//\//-}"
+    docker image pull --quiet "${target_image}:${branch}"
+    docker image pull --quiet "${target_image}:master"
+    if [ "${CACHE_FROM}" != "" ] ; then
+        docker image pull --quiet "${cache_image}:master"
+    fi
+    echo "done." >> "${REPORT}"
 fi
-echo "done." >> "${REPORT}"
 
 echo -e "\\n#################### Building Image ${TARGET} ####################" | tee -a "${REPORT}"
 echo -e "Dockerfile: ${DOCKERFILE}" |& tee -a "${REPORT}"

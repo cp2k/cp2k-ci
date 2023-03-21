@@ -102,6 +102,7 @@ class KubernetesUtil:
         git_branch: str,
         git_ref: str,
         job_annotations: Dict[str, str],
+        use_cache: bool = True,
         priority: Optional[str] = None,
     ) -> None:
         print(f"Submitting run for target: {target.name}.")
@@ -147,6 +148,7 @@ class KubernetesUtil:
             env_vars["BUILD_PATH"] = target.build_path
             build_args = f"{target.build_args} GIT_COMMIT_SHA={git_ref}"
             env_vars["BUILD_ARGS"] = build_args.strip()
+            env_vars["USE_CACHE"] = "yes" if use_cache else "no"
             env_vars["CACHE_FROM"] = target.cache_from
             env_vars["NUM_GPUS_REQUIRED"] = str(target.gpu)
 

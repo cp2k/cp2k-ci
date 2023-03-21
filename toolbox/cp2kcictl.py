@@ -22,11 +22,7 @@ def main() -> None:
     if rpc == "submit_all_dashboard_tests":
         message_backend(rpc=rpc)
 
-    elif rpc == "submit_dashboard_test":
-        target = sys.argv[2]
-        message_backend(rpc=rpc, target=target)
-
-    elif rpc == "submit_dashboard_test_force":
+    elif rpc in ("submit_dashboard_test", "submit_dashboard_test_force"):
         target = sys.argv[2]
         message_backend(rpc=rpc, target=target)
 
@@ -35,7 +31,7 @@ def main() -> None:
         pr_number = int(sys.argv[3])
         message_backend(rpc=rpc, repo=repo, pr_number=pr_number)
 
-    elif rpc == "submit_check_run":
+    elif rpc in ("submit_check_run", "submit_check_run_nocache"):
         repo = sys.argv[2]
         pr_number = int(sys.argv[3])
         target = sys.argv[4]
@@ -48,8 +44,9 @@ def main() -> None:
 
 # ======================================================================================
 def print_usage() -> None:
-    print("Usage: cp2kcictl.py [ submit_check_run <repo> <pr_number> <target> |")
-    print("                      process_pull_request <repo> <pr_number> |")
+    print("Usage: cp2kcictl.py [ submit_check_run <repo> <pr> <target> |")
+    print("                      submit_check_run_nocache <repo> <pr> <target> |")
+    print("                      process_pull_request <repo> <pr> |")
     print("                      submit_dashboard_test <target> |")
     print("                      submit_dashboard_test_force <target> |")
     print("                      submit_all_dashboard_tests ]")

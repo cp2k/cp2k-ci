@@ -73,6 +73,13 @@ class SubmitCheckRunRequest(TypedDict):
     target: TargetName
 
 
+class SubmitCheckRunNocacheRequest(TypedDict):
+    rpc: Literal["submit_check_run_nocache"]
+    repo: str
+    pr_number: PullRequestNumber
+    target: TargetName
+
+
 class ProcessPullRequestRequest(TypedDict):
     rpc: Literal["process_pull_request"]
     repo: str
@@ -92,6 +99,7 @@ RpcRequest = Union[
     SubmitDashboardTestRequest,
     SubmitDashboardTestForceRequest,
     SubmitCheckRunRequest,
+    SubmitCheckRunNocacheRequest,
     ProcessPullRequestRequest,
     GithubEventRequest,
 ]
@@ -184,6 +192,12 @@ def process_rpc(request: RpcRequest) -> None:
         target = gh.get_target_by_name(request["target"], pr)
         submit_check_run(target, gh, pr, sender="_somebody_")
 
+    elif request["rpc"] == "submit_check_run_nocache":
+        gh = GithubUtil(request["repo"])
+        pr = gh.get_pull_request(request["pr_number"])
+        target = gh.get_target_by_name(request["target"], pr)
+        submit_check_run(target, gh, pr, sender="_somebody_", use_cache=False)
+
     elif request["rpc"] == "process_pull_request":
         gh = GithubUtil(request["repo"])
         process_pull_request(gh, request["pr_number"], sender="_somebody_")
@@ -231,6 +245,8 @@ def process_github_event(event: str, body: GithubEvent) -> None:
         target = gh.get_target_by_name(target_name, pr)
         if requested_action == "run":
             submit_check_run(target, gh, pr, sender)
+        elif requested_action == "run_nocache":
+            submit_check_run(target, gh, pr, sender, use_cache=False)
         elif requested_action == "cancel":
             cancel_check_runs(target.name, gh, pr, sender)
         else:
@@ -376,7 +392,12 @@ def parse_external_id(
 
 # ======================================================================================
 def submit_check_run(
-    target: Target, gh: GithubUtil, pr: PullRequest, sender: str, optional: bool = False
+    target: Target,
+    gh: GithubUtil,
+    pr: PullRequest,
+    sender: str,
+    use_cache: bool = True,
+    optional: bool = False,
 ) -> None:
     check_run: CheckRun = {
         "name": target.display_name,
@@ -412,7 +433,11 @@ def submit_check_run(
     }
     git_branch = "pull/{}/merge".format(pr["number"])
     kubeutil.submit_run(
-        target, git_branch, pr["merge_commit_sha"], job_annotations, "high-priority"
+        target,
+        git_branch,
+        pr["merge_commit_sha"],
+        job_annotations,
+        priority="high-priority",
     )
 
 
@@ -450,7 +475,12 @@ def cancel_check_runs(
                     "label": "Restart",
                     "identifier": "run",
                     "description": "Trigger test run.",
-                }
+                },
+                {
+                    "label": "Restart without Cache",
+                    "identifier": "run_nocache",
+                    "description": "Trigger test run without build cache.",
+                },
             ],
         }
         gh.patch_check_run(check_run)
