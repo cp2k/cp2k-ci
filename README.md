@@ -15,15 +15,28 @@ The typical use case consists of the following steps:
 
 ## Configuration
 
-The CP2K-CI is configured via the [cp2k-ci.conf](./backend/cp2k-ci.conf) file. The file has the format of the python [configparser](https://docs.python.org/3/library/configparser.html). Each section is refereed to as a _target_. Typical sections looks like this:
+### Repository Configuration
+The CP2K-CI can be enabled for any repository within the [CP2K GitHub organization](https://github.com/cp2k).
+The repositories are configured via the [repository_config.py](./backend/repository_config.py) file.
+The fields have the following meaning.
+
+| Field           | Description                                                           |
+| --------------- | --------------------------------------------------------------------- |
+| name            | Name of repository below https://github.com/cp2k/ .                   |
+| targets_config  | Path to targets configuration file within the given repository.       |
+| required_checks | List of targets that should run automatically for every pull request. |
+
+
+### Targets Configuration
+The targets of a repository are configured via a file within the repository itself, e.g. like [this](https://github.com/cp2k/cp2k/blob/master/tools/docker/cp2k-ci.conf).
+
+The file has the format of the python [configparser](https://docs.python.org/3/library/configparser.html). Each section is refereed to as a _target_. Typical sections looks like this:
 ```
-[cp2k-sdbg]
+[sdbg]
 display_name: Regtest sdbg
-repository:   cp2k
 cpu:          32
-nodepools:    pool-highcpu-32-haswell
-tags:         required_check_run dashboard
-build_path:   /tools/docker
+nodepools:    pool-t2d-32
+build_path:   /
 dockerfile:   /tools/docker/Dockerfile.test_sdbg
 ```
 
@@ -34,24 +47,14 @@ The fields have the following meaning. All lists are white-space separated.
 | ------------ | ---------------------------------------------------------------------------------------------|
 | [foo-bar]    | Internal name used e.g. in report url.                                                       |
 | display_name | Visible name of check run.                                                                   |
-| repository   | Name of repository below https://github.com/cp2k/ .                                          |
 | cpu          | Number of CPUs to allocate for building and running.                                         |
 | gpu          | Number of GPUs to allocate for building and running.                                         |
 | arch         | Architecture of the CPU, possible values are "arm64" and "x86", defaults to "x86".           |
 | nodepools    | List of eligible nodepools, [see also](setup/create_node_pools.sh).                          |
-| tags         | Tags which determine when and how this target is build and run.                              |
 | build_args   | List of Docker build arguments.                                                              |
 | build_path   | Path to build context within given repository.                                               |
 | dockerfile   | Path to Dockerfile within given repository.                                                  |
 | cache_from   | Optional name of target that should be used as additional cache source during the build.     |
-
-Tags determine when and how a target is build and run.
-
-| Tag                 | Description                                                                                  |
-| ------------------- | -------------------------------------------------------------------------------------------- |
-| required_check_run  | Automatically run this as check run for every pull request.                                  |
-| optional_check_run  | Add this as an optional check run for every pull request.                                    |
-| dashboard           | Run this target when the `submit_all_dashboard_tests` RPC is received.                       |
 
 
 ## Communication with Containers
