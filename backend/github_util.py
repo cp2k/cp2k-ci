@@ -108,11 +108,6 @@ class CheckSuite(TypedDict, total=False):
 
 
 # ======================================================================================
-class Action(TypedDict, total=False):
-    identifier: str
-
-
-# ======================================================================================
 # TODO split into seperate events.
 class GithubEvent(TypedDict, total=False):
     name: str
@@ -121,7 +116,15 @@ class GithubEvent(TypedDict, total=False):
     sender: User
     check_suite: CheckSuite
     check_run: CheckRun
-    requested_action: Action
+    requested_action: CheckRunAction
+
+
+# ======================================================================================
+def assert_check_run_limits(check_run: CheckRun) -> None:
+    # Checks the length limits on strings in check run actions.
+    for a in check_run.get("actions", []):
+        assert len(a["label"]) <= 20 and len(a["identifier"]) <= 20
+        assert len(a["description"]) <= 40
 
 
 # ======================================================================================
@@ -259,11 +262,13 @@ class GithubUtil:
 
     # --------------------------------------------------------------------------
     def post_check_run(self, check_run: CheckRun) -> CheckRun:
+        assert_check_run_limits(check_run)
         new_check_run = self._post("/check-runs", check_run)
         return cast(CheckRun, new_check_run)
 
     # --------------------------------------------------------------------------
     def patch_check_run(self, check_run: CheckRun) -> None:
+        assert_check_run_limits(check_run)
         self._patch(check_run["url"], check_run)
 
     # --------------------------------------------------------------------------

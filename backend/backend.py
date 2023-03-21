@@ -477,7 +477,7 @@ def cancel_check_runs(
                     "description": "Trigger test run.",
                 },
                 {
-                    "label": "Restart without Cache",
+                    "label": "Restart w/o Cache",
                     "identifier": "run_nocache",
                     "description": "Trigger test run without build cache.",
                 },
