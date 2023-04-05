@@ -212,7 +212,7 @@ def process_github_event(event: str, body: GithubEvent) -> None:
     action = body.get("action", "")
     print(f"Got github even: {event} action: {action}")
 
-    if event == "pull_request" and action in ("opened", "synchronize"):
+    if event == "pull_request" and action in ("opened", "reopened", "synchronize"):
         gh = GithubUtil(body["repository"]["name"])
         pr_number = body["number"]
         sender = body["sender"]["login"]
