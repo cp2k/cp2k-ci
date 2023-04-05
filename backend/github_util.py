@@ -194,7 +194,7 @@ class GithubUtil:
         )
         remaining = r.headers.get("X-RateLimit-Remaining", None)
         if remaining and int(remaining) < 100:
-            print("X-RateLimit-Remaining: {}".format(remaining))
+            print(f"X-RateLimit-Remaining: {remaining}")
         if r.status_code >= 400:
             print(r.text)
         r.raise_for_status()

@@ -210,7 +210,7 @@ def process_rpc(request: RpcRequest) -> None:
 # ======================================================================================
 def process_github_event(event: str, body: GithubEvent) -> None:
     action = body.get("action", "")
-    print("Got github even: {} action: {}".format(event, action))
+    print(f"Got github even: {event} action: {action}")
 
     if event == "pull_request" and action in ("opened", "synchronize"):
         gh = GithubUtil(body["repository"]["name"])
@@ -251,7 +251,7 @@ def process_github_event(event: str, body: GithubEvent) -> None:
         elif requested_action == "cancel":
             cancel_check_runs(target.name, gh, pr, sender)
         else:
-            print("Unknown requested action: {}".format(requested_action))
+            print(f"Unknown requested action: {requested_action}")
     else:
         pass  # Unhandled github even - there are many of these.
 
@@ -289,7 +289,7 @@ def await_mergeability(
 
         # Reload pull request.
         pr_number = pr["number"]
-        print("Waiting for mergeability check of PR {}".format(pr_number))
+        print(f"Waiting for mergeability check of PR {pr_number}")
         sleep(5)
         pr = gh.get_pull_request(pr_number)
 
@@ -298,7 +298,7 @@ def await_mergeability(
     check_run["conclusion"] = "failure"
     check_run["output"] = {"title": "Mergeability check timeout.", "summary": ""}
     gh.post_check_run(check_run)
-    raise Exception("Mergeability check timeout on PR {}".format(pr_number))
+    raise Exception(f"Mergeability check timeout on PR {pr_number}")
 
 
 # ======================================================================================
@@ -365,7 +365,7 @@ def check_git_history(gh: GithubUtil, pr: PullRequest, commits: List[Commit]) ->
         help_url = "https://github.com/cp2k/cp2k/wiki/CP2K-CI#git-history-contains-merge-commits"
         check_run["output"] = {
             "title": "Git history contains merge commits.",
-            "summary": "[How to fix this?]({})".format(help_url),
+            "summary": f"[How to fix this?]({help_url})",
         }
     else:
         check_run["conclusion"] = "success"
@@ -463,9 +463,9 @@ def cancel_check_runs(
             continue
 
         # Ok found a matching job to cancel.
-        print("Canceling job {}.".format(job.metadata.name))
+        print(f"Canceling job {job.metadata.name}.")
         summary = "[Partial Report]({})".format(job_annotations["cp2kci-report-url"])
-        summary += "\n\nCancelled by @{}.".format(sender)
+        summary += f"\n\nCancelled by @{sender}."
         check_run: CheckRun = {
             "url": job_annotations["cp2kci-check-run-url"],
             "status": "completed",
@@ -491,16 +491,16 @@ def submit_dashboard_test(target: Target, head_sha: str, force: bool = False) ->
                 and "cp2kci-dashboard" in job.metadata.annotations
                 and (job.status.active or job.status.completion_time)
             ):
-                print("Found already underway dashboard job for: {}.".format(target))
+                print(f"Found already underway dashboard job for: {target.name}.")
                 return  # Do not submit another job.
 
         if get_dashboard_report_sha(target.name) == head_sha:
-            print("Found up-to-date dashboard report for: {}.".format(target))
+            print(f"Found up-to-date dashboard report for: {target.name}.")
             return  # No need to submit another job.
 
         if target.cache_from:
             if get_dashboard_report_sha(target.cache_from) != head_sha:
-                print("Found stale cache_from dashboard report for: {}.".format(target))
+                print(f"Found stale cache_from dashboard report for: {target.name}.")
                 return  # Won't submit a job without up-to-date cache_from image.
 
     # Finally submit a new job.
@@ -657,12 +657,12 @@ def publish_job_to_github(job: V1Job) -> None:
         check_run["completed_at"] = gh.now()
         check_run["actions"] = build_restart_actions()
         check_run["output"]["title"] = report.summary
-        summary = "[Detailed Report]({})".format(report_blob.public_url)
+        summary = f"[Detailed Report]({report_blob.public_url})"
         if artifacts_blob.exists():
-            summary += "\n\n[Artifacts]({})".format(artifacts_blob.public_url)
+            summary += f"\n\n[Artifacts]({artifacts_blob.public_url})"
     else:
         check_run["output"]["title"] = "In Progress..."
-        summary = "[Live Report]({}) (updates every 30s)".format(report_blob.public_url)
+        summary = f"[Live Report]({report_blob.public_url}) (updates every 30s)"
         check_run["actions"] = [
             {
                 "label": "Cancel",
@@ -672,7 +672,7 @@ def publish_job_to_github(job: V1Job) -> None:
         ]
 
     sender = job_annotations["cp2kci-sender"]
-    summary += "\n\nTriggered by @{}.".format(sender)
+    summary += f"\n\nTriggered by @{sender}."
     check_run["output"]["summary"] = summary
 
     # update check_run
