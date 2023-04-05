@@ -268,6 +268,7 @@ def await_mergeability(
     check_run: CheckRun
 
     for i in range(10):
+        print(f"await_mergeability ({i}): {pr}")
         if pr["mergeable"] is not None and not pr["mergeable"]:
             return  # not mergeable
         elif pr["mergeable"] is not None and pr["mergeable"]:
