@@ -190,7 +190,7 @@ class GithubUtil:
         if remaining and int(remaining) < 100:
             print(f"X-RateLimit-Remaining: {remaining}")
         if r.status_code >= 400:
-            print(r.text)
+            print(f"Got http-status {r.status_code} with body: {r.text}")
         r.raise_for_status()
         return r
 

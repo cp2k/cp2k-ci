@@ -158,8 +158,6 @@ def process_pubsub_message(message: Any) -> None:
 
 # ======================================================================================
 def process_rpc(request: RpcRequest) -> None:
-    print("Got RPC: " + request["rpc"])
-
     if request["rpc"] == "echo":
         print("Got request: ", request)
 
@@ -167,6 +165,7 @@ def process_rpc(request: RpcRequest) -> None:
         blob = output_bucket.blob("healthz_beacon.txt")
         blob.cache_control = "no-cache"
         blob.upload_from_string(datetime.utcnow().isoformat())
+        print("Updated healthz_beacon.txt")
 
     elif request["rpc"] == "github_event":
         process_github_event(request["event"], request["body"])
