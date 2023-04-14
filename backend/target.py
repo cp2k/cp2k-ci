@@ -23,8 +23,8 @@ class Target:
         self.name = TargetName(f"{repo_conf.name}-{section}")
         self.display_name = config.get(section, "display_name")
         self.is_required_check = section in repo_conf.required_checks
-        self.cpu = config.getfloat(section, "cpu")
-        self.gpu = config.getfloat(section, "gpu", fallback=0)
+        self.cpu = config.getint(section, "cpu")
+        self.gpu = config.getint(section, "gpu", fallback=0)
         self.nodepools = config.get(section, "nodepools").split()
         self.dockerfile = config.get(section, "dockerfile")
         self.build_path = config.get(section, "build_path")
