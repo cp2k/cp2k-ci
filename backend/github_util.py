@@ -225,11 +225,11 @@ class GithubUtil:
     # --------------------------------------------------------------------------
     def _iterate(self, url: str) -> Iterator[Any]:
         r = self._authenticated_http_request("GET", url, retries=5)
-        yield from r.json()
+        yield r.json()
         while "next" in r.links:
             url = r.links["next"]["url"]
             r = self._authenticated_http_request("GET", url, retries=5)
-            yield from r.json()
+            yield r.json()
 
     # --------------------------------------------------------------------------
     def _post(self, url: str, body: Any) -> Any:
@@ -266,13 +266,13 @@ class GithubUtil:
 
     # --------------------------------------------------------------------------
     def iterate_commits(self, url: str) -> Iterator[Commit]:
-        commit_iterator = self._iterate(url)
-        return cast(Iterator[Commit], commit_iterator)
+        for page in self._iterate(url):
+            yield from page
 
     # --------------------------------------------------------------------------
     def iterate_pull_requests(self) -> Iterator[PullRequest]:
-        pr_iterator = self._iterate("/pulls")
-        return cast(Iterator[PullRequest], pr_iterator)
+        for page in self._iterate("/pulls"):
+            yield from page
 
 
 # EOF
