@@ -487,7 +487,7 @@ def submit_dashboard_test(target: Target, head_sha: str, force: bool = False) ->
         run_job_list = kubeutil.list_jobs("cp2kci=run")
         for job in run_job_list.items:
             if (
-                job.metadata.annotations["cp2kci-target"] == target
+                job.metadata.annotations["cp2kci-target"] == target.name
                 and "cp2kci-dashboard" in job.metadata.annotations
                 and (job.status.active or job.status.completion_time)
             ):
