@@ -223,7 +223,7 @@ class GithubUtil:
         return r.json()
 
     # --------------------------------------------------------------------------
-    def _iterate(self, url: str) -> Iterator[Any]:
+    def _iterate_pages(self, url: str) -> Iterator[Any]:
         r = self._authenticated_http_request("GET", url, retries=5)
         yield r.json()
         while "next" in r.links:
@@ -250,10 +250,6 @@ class GithubUtil:
         return cast(Commit, commit)
 
     # --------------------------------------------------------------------------
-    def get_check_runs(self, url: str) -> List[CheckRun]:
-        return sum([page["check_runs"] for page in self._iterate(url)], [])
-
-    # --------------------------------------------------------------------------
     def post_check_run(self, check_run: CheckRun) -> CheckRun:
         assert_check_run_limits(check_run)
         new_check_run = self._post("/check-runs", check_run)
@@ -265,13 +261,18 @@ class GithubUtil:
         self._patch(check_run["url"], check_run)
 
     # --------------------------------------------------------------------------
+    def iterate_check_runs(self, url: str) -> Iterator[CheckRun]:
+        for page in self._iterate_pages(url):
+            yield from page["check_runs"]
+
+    # --------------------------------------------------------------------------
     def iterate_commits(self, url: str) -> Iterator[Commit]:
-        for page in self._iterate(url):
+        for page in self._iterate_pages(url):
             yield from page
 
     # --------------------------------------------------------------------------
     def iterate_pull_requests(self) -> Iterator[PullRequest]:
-        for page in self._iterate("/pulls"):
+        for page in self._iterate_pages("/pulls"):
             yield from page
 
 

@@ -220,8 +220,8 @@ def process_github_event(event: str, body: GithubEvent) -> None:
     elif event == "check_suite" and action == "rerequested":
         # snatch pr_number from existing check_runs
         gh = GithubUtil(body["repository"]["name"])
-        prev_check_runs = gh.get_check_runs(body["check_suite"]["check_runs_url"])
-        ext_id = prev_check_runs[0]["external_id"]
+        prev_check_runs = gh.iterate_check_runs(body["check_suite"]["check_runs_url"])
+        ext_id = next(prev_check_runs)["external_id"]
         pr_number, _ = parse_external_id(ext_id)
         sender = body["sender"]["login"]
         process_pull_request(gh, pr_number, sender)
@@ -317,7 +317,7 @@ def process_pull_request(
     # Find previous check run conclusions, before we call cancel on them.
     prev_check_runs: List[CheckRun] = []
     for commit in reversed(commits):
-        prev_check_runs = gh.get_check_runs(commit["url"] + "/check-runs")
+        prev_check_runs = list(gh.iterate_check_runs(commit["url"] + "/check-runs"))
         if prev_check_runs:
             break
     prev_conclusions: Dict[TargetName, str] = {}
@@ -544,7 +544,7 @@ def poll_pull_requests(job_list: V1JobList) -> None:
                 continue  # ignore non-master PR
             head_sha = pr["head"]["sha"]
 
-            check_runs = gh.get_check_runs(f"/commits/{head_sha}/check-runs")
+            check_runs = list(gh.iterate_check_runs(f"/commits/{head_sha}/check-runs"))
             for check_run in check_runs:
                 if check_run["status"] == "completed":
                     continue  # Good, check_run is completed.
