@@ -62,12 +62,6 @@ class CheckRun(TypedDict, total=False):
 
 
 # ======================================================================================
-class CheckRunList(TypedDict, total=False):
-    check_runs: List[CheckRun]
-    total_count: int
-
-
-# ======================================================================================
 class Commit(TypedDict, total=False):
     sha: CommitSha
     url: str
@@ -256,9 +250,8 @@ class GithubUtil:
         return cast(Commit, commit)
 
     # --------------------------------------------------------------------------
-    def get_check_runs(self, url: str) -> CheckRunList:
-        check_run_list = self._get(url)
-        return cast(CheckRunList, check_run_list)
+    def get_check_runs(self, url: str) -> List[CheckRun]:
+        return sum([page["check_runs"] for page in self._iterate(url)], [])
 
     # --------------------------------------------------------------------------
     def post_check_run(self, check_run: CheckRun) -> CheckRun:
