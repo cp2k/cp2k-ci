@@ -261,7 +261,7 @@ def await_mergeability(
     pr: PullRequest,
     check_run_name: str,
     check_run_external_id: CheckRunExternalId,
-) -> None:
+) -> PullRequest:
     # https://developer.github.com/v3/git/#checking-mergeability-of-pull-requests
 
     check_run: CheckRun
@@ -269,12 +269,12 @@ def await_mergeability(
     for i in range(10):
         print(f"await_mergeability ({i}): {pr}")
         if pr["mergeable"] is not None and not pr["mergeable"]:
-            return  # not mergeable
+            return pr  # not mergeable
         elif pr["mergeable"] is not None and pr["mergeable"]:
             # Check freshness of merge branch.
             merge_commit = gh.get_commit(pr["merge_commit_sha"])
             if any(p["sha"] == pr["head"]["sha"] for p in merge_commit["parents"]):
-                return  # mergeable
+                return pr  # mergeable
 
         # This might take a while, tell the user and disable resubmit buttons.
         if i == 0:
@@ -355,7 +355,7 @@ def check_git_history(gh: GithubUtil, pr: PullRequest, commits: List[Commit]) ->
         "completed_at": gh.now(),
     }
 
-    await_mergeability(gh, pr, check_run["name"], check_run["external_id"])
+    pr = await_mergeability(gh, pr, check_run["name"], check_run["external_id"])
 
     if not pr["mergeable"]:
         check_run["conclusion"] = "failure"
@@ -422,7 +422,7 @@ def submit_check_run(
         return
 
     # Let's submit the job.
-    await_mergeability(gh, pr, check_run["name"], check_run["external_id"])
+    pr = await_mergeability(gh, pr, check_run["name"], check_run["external_id"])
     check_run = gh.post_check_run(check_run)
     job_annotations = {
         "cp2kci-sender": sender,
