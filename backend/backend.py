@@ -267,7 +267,6 @@ def await_mergeability(
     check_run: CheckRun
 
     for i in range(10):
-        print(f"await_mergeability ({i}): {pr}")
         if pr["mergeable"] is not None and not pr["mergeable"]:
             return pr  # not mergeable
         elif pr["mergeable"] is not None and pr["mergeable"]:
@@ -337,7 +336,7 @@ def process_pull_request(
         return
 
     # submit check runs
-    for target in gh.get_targets():
+    for target in gh.get_targets(pr):
         if target.name in prev_conclusions:
             optional = prev_conclusions[target.name] in ("neutral", "cancelled")
         else:
