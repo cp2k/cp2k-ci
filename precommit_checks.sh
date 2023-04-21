@@ -4,6 +4,8 @@
 
 set -x
 
+shellcheck */*.sh
+
 black */*.py
 
 mypy --strict frontend/*.py
