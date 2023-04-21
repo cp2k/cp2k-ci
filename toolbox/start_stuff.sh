@@ -36,10 +36,6 @@ fi
 
 docker info
 
-# Increase BuildKit log size to 10MiB.
-# https://stackoverflow.com/questions/65819424
-docker buildx create --use --driver-opt env.BUILDKIT_STEP_LOG_MAX_SIZE=10485760
-
 #https://issuetracker.google.com/issues/38098801
 gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
 #gcloud auth list

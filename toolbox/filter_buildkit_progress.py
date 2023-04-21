@@ -13,5 +13,6 @@ for line in sys.stdin:
         sys.stdout.write(" ".join(parts[2:]))
     else:
         sys.stdout.write(line)
+    sys.stdout.flush()
 
 # EOF
