@@ -29,22 +29,22 @@ COPY requirements.txt .
 RUN pip3 install -r requirements.txt
 
 # install docker
-RUN apt-key adv --fetch-keys https://download.docker.com/linux/ubuntu/gpg && \
-    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable" && \
+RUN wget -qO- https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/docker.gpg && \
+    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" && \
     apt-get update  -qq && \
     apt-get install -qq docker-ce && \
     rm -rf /var/lib/apt/lists/*
 
 # install nvidia-docker
 # https://github.com/NVIDIA/nvidia-docker
-RUN apt-key adv --fetch-keys https://nvidia.github.io/nvidia-docker/gpgkey && \
+RUN wget -qO- https://nvidia.github.io/nvidia-docker/gpgkey | gpg --dearmor -o /etc/apt/trusted.gpg.d/nvidia-docker.gpg && \
     wget -qO- https://nvidia.github.io/nvidia-docker/ubuntu$(lsb_release -rs)/nvidia-docker.list | tee /etc/apt/sources.list.d/nvidia-docker.list && \
     apt-get update -qq && \
     apt-get install -qq nvidia-docker2 && \
     rm -rf /var/lib/apt/lists/*
 
 # install gcloud
-RUN apt-key adv --fetch-keys https://packages.cloud.google.com/apt/doc/apt-key.gpg && \
+RUN wget -qO- https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/google-cloud.gpg && \
     add-apt-repository "deb http://packages.cloud.google.com/apt cloud-sdk main" && \
     apt-get update -qq && \
     apt-get install -qq google-cloud-sdk && \
