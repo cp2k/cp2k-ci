@@ -118,10 +118,7 @@ for arg in ${BUILD_ARGS} ; do
     build_args_flags+=("--build-arg")
     build_args_flags+=("${arg}")
 done
-#
-# Disable buildkit for now because its new output breaks the CI and Dashboard.
-export DOCKER_BUILDKIT=0
-#
+
 # The order of the --cache-from images matters!
 # Since builds step are usually not reproducible, there can be multiple suitable
 # layers in the cache. Preferring prevalent images should counteract divergence.
@@ -133,7 +130,9 @@ if ! docker build \
        --tag "${target_image}:${branch}" \
        --file ".${DOCKERFILE}" \
        --shm-size=1g \
-       "${build_args_flags[@]}" ".${BUILD_PATH}" |& tee -a "${REPORT}" ; then
+       --progress=plain \
+       "${build_args_flags[@]}" ".${BUILD_PATH}" |& \
+       ./filter_buildkit_progress.py | tee -a "${REPORT}" ; then
   # Build failed, salvage last succesful step.
   last_layer=$(docker images --quiet | head -n 1)
   docker tag "${last_layer}" "${target_image}:${branch}"
