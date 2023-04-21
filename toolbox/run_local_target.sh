@@ -132,7 +132,7 @@ if ! docker build \
        --shm-size=1g \
        --progress=plain \
        "${build_args_flags[@]}" ".${BUILD_PATH}" |& \
-       ./filter_buildkit_progress.py | tee -a "${REPORT}" ; then
+       /opt/cp2kci-toolbox/filter_buildkit_progress.py | tee -a "${REPORT}" ; then
   # Build failed, salvage last succesful step.
   last_layer=$(docker images --quiet | head -n 1)
   docker tag "${last_layer}" "${target_image}:${branch}"
