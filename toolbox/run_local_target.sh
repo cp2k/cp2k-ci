@@ -97,7 +97,7 @@ git --no-pager log -1 --pretty='%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: 
 echo -e "\\n#################### Building Image ${TARGET} ####################" | tee -a "${REPORT}"
 echo -e "Dockerfile: ${DOCKERFILE}" |& tee -a "${REPORT}"
 echo -e "Build-Path: ${BUILD_PATH}" |& tee -a "${REPORT}"
-echo -e "Build-Args: ${BUILD_ARGS}\\n" |& tee -a "${REPORT}"
+echo -e "Build-Args: ${BUILD_ARGS}" |& tee -a "${REPORT}"
 # Convert BUILD_ARGS into array of flags suitable for docker build.
 build_args_flags=()
 for arg in ${BUILD_ARGS} ; do
@@ -108,7 +108,7 @@ done
 # Prepare cache from flags for docker buildx.
 cache_from_flags=()
 if [ "${USE_CACHE}" == "yes" ] ; then
-    echo "Using docker build cache." | tee -a "${REPORT}"
+    echo -e "Build-Cache: Yes\\n" | tee -a "${REPORT}"
     # The order of the --cache-from images matters!
     # Since builds step are usually not reproducible, there can be multiple suitable
     # layers in the cache. Preferring prevalent images should counteract divergence.
@@ -119,7 +119,7 @@ if [ "${USE_CACHE}" == "yes" ] ; then
     cache_from_flags+=("--cache-from" "type=registry,ref=${target_image}:master")
     cache_from_flags+=("--cache-from" "type=registry,ref=${target_image}:${branch}")
 else
-    echo "Proceeding without docker build cache." | tee -a "${REPORT}"
+    echo -e "Build-Cache: No\\n" | tee -a "${REPORT}"
 fi
 
 # Build the image.
