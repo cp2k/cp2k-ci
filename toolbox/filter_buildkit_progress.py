@@ -13,6 +13,8 @@ for line in sys.stdin:
         sys.stdout.write(" ".join(parts[2:]))  # remove timing
     elif len(parts) > 2 and parts[1] == "pushing" and parts[2] == "layer":
         continue  # remove entire line
+    elif len(parts) > 2 and parts[1] == "pulling" and parts[2].startswith("sha256:"):
+        continue  # remove entire line
     else:
         sys.stdout.write(line)
     sys.stdout.flush()
