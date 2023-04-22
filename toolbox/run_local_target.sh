@@ -80,7 +80,6 @@ PROJECT=${PROJECT:-"cp2k-org-project"}
 DOCKER_REPO="us-central1-docker.pkg.dev/${PROJECT}/cp2kci"
 
 target_image="${DOCKER_REPO}/img_${TARGET}"
-cache_image="${DOCKER_REPO}/img_${CACHE_FROM}"
 branch="${GIT_BRANCH//\//-}"
 
 # Update git repo which contains the Dockerfiles.
@@ -95,19 +94,6 @@ fi
 git submodule update --init --recursive
 git --no-pager log -1 --pretty='%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: %an%nCommitSubject: %s%n' |& tee -a "${REPORT}"
 
-#if [ "${USE_CACHE}" == "yes" ] ; then
-#    echo -en "Populating docker build cache... " | tee -a "${REPORT}"
-#    echo ""
-#    docker image pull --quiet "${target_image}:${branch}"
-#    docker image pull --quiet "${target_image}:master"
-#    if [ "${CACHE_FROM}" != "" ] ; then
-#        docker image pull --quiet "${cache_image}:master"
-#    fi
-#    echo "done." >> "${REPORT}"
-#else
-#    echo "Proceeding without docker build cache." | tee -a "${REPORT}"
-#fi
-
 echo -e "\\n#################### Building Image ${TARGET} ####################" | tee -a "${REPORT}"
 echo -e "Dockerfile: ${DOCKERFILE}" |& tee -a "${REPORT}"
 echo -e "Build-Path: ${BUILD_PATH}" |& tee -a "${REPORT}"
@@ -119,14 +105,27 @@ for arg in ${BUILD_ARGS} ; do
     build_args_flags+=("${arg}")
 done
 
-# The order of the --cache-from images matters!
-# Since builds step are usually not reproducible, there can be multiple suitable
-# layers in the cache. Preferring prevalent images should counteract divergence.
+# Prepare cache from flags for docker buildx.
+cache_from_flags=()
+if [ "${USE_CACHE}" == "yes" ] ; then
+    echo "Using docker build cache." | tee -a "${REPORT}"
+    # The order of the --cache-from images matters!
+    # Since builds step are usually not reproducible, there can be multiple suitable
+    # layers in the cache. Preferring prevalent images should counteract divergence.
+    if [ "${CACHE_FROM}" != "" ] ; then
+        cache_image="${DOCKER_REPO}/img_${CACHE_FROM}"
+        cache_from_flags+=("--cache-from" "type=registry,ref=${cache_image}:master")
+    fi
+    cache_from_flags+=("--cache-from" "type=registry,ref=${target_image}:master")
+    cache_from_flags+=("--cache-from" "type=registry,ref=${target_image}:${branch}")
+else
+    echo "Proceeding without docker build cache." | tee -a "${REPORT}"
+fi
+
+# Build the image.
 if ! docker buildx build \
        --memory "${MEMORY_LIMIT_MB}m" \
-       --cache-from "type=registry,ref=${cache_image}:master" \
-       --cache-from "type=registry,ref=${target_image}:master" \
-       --cache-from "type=registry,ref=${target_image}:${branch}" \
+       "${cache_from_flags[@]}" \
        --cache-to "type=inline" \
        --push \
        --tag "${target_image}:${branch}" \
@@ -135,6 +134,7 @@ if ! docker buildx build \
        --progress=plain \
        "${build_args_flags[@]}" ".${BUILD_PATH}" |& \
        /opt/cp2kci-toolbox/filter_buildkit_progress.py | tee -a "${REPORT}" ; then
+
   # Build failed, salvage last succesful step.
   last_layer=$(docker images --quiet | head -n 1)
   docker tag "${last_layer}" "${target_image}:${branch}"
@@ -147,10 +147,6 @@ if ! docker buildx build \
   upload_final_report
   exit 0  # Prevent crash looping.
 fi
-#echo -en "\\nPushing new image... " | tee -a "${REPORT}"
-#echo ""
-#docker image push --quiet "${target_image}:${branch}"
-#echo "done." >> "${REPORT}"
 
 echo -e "\\n#################### Running Image ${TARGET} ####################" | tee -a "${REPORT}"
 if ! docker run --init --cap-add=SYS_PTRACE --shm-size=1g \
