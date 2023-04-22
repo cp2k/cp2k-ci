@@ -95,18 +95,18 @@ fi
 git submodule update --init --recursive
 git --no-pager log -1 --pretty='%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: %an%nCommitSubject: %s%n' |& tee -a "${REPORT}"
 
-if [ "${USE_CACHE}" == "yes" ] ; then
-    echo -en "Populating docker build cache... " | tee -a "${REPORT}"
-    echo ""
-    docker image pull --quiet "${target_image}:${branch}"
-    docker image pull --quiet "${target_image}:master"
-    if [ "${CACHE_FROM}" != "" ] ; then
-        docker image pull --quiet "${cache_image}:master"
-    fi
-    echo "done." >> "${REPORT}"
-else
-    echo "Proceeding without docker build cache." | tee -a "${REPORT}"
-fi
+#if [ "${USE_CACHE}" == "yes" ] ; then
+#    echo -en "Populating docker build cache... " | tee -a "${REPORT}"
+#    echo ""
+#    docker image pull --quiet "${target_image}:${branch}"
+#    docker image pull --quiet "${target_image}:master"
+#    if [ "${CACHE_FROM}" != "" ] ; then
+#        docker image pull --quiet "${cache_image}:master"
+#    fi
+#    echo "done." >> "${REPORT}"
+#else
+#    echo "Proceeding without docker build cache." | tee -a "${REPORT}"
+#fi
 
 echo -e "\\n#################### Building Image ${TARGET} ####################" | tee -a "${REPORT}"
 echo -e "Dockerfile: ${DOCKERFILE}" |& tee -a "${REPORT}"
@@ -122,11 +122,13 @@ done
 # The order of the --cache-from images matters!
 # Since builds step are usually not reproducible, there can be multiple suitable
 # layers in the cache. Preferring prevalent images should counteract divergence.
-if ! docker build \
+if ! docker buildx build \
        --memory "${MEMORY_LIMIT_MB}m" \
-       --cache-from "${cache_image}:master" \
-       --cache-from "${target_image}:master" \
-       --cache-from "${target_image}:${branch}" \
+       --cache-from "type=registry,ref=${cache_image}:master" \
+       --cache-from "type=registry,ref=${target_image}:master" \
+       --cache-from "type=registry,ref=${target_image}:${branch}" \
+       --cache-to "type=inline" \
+       --push \
        --tag "${target_image}:${branch}" \
        --file ".${DOCKERFILE}" \
        --shm-size=1g \
@@ -145,10 +147,10 @@ if ! docker build \
   upload_final_report
   exit 0  # Prevent crash looping.
 fi
-echo -en "\\nPushing new image... " | tee -a "${REPORT}"
-echo ""
-docker image push --quiet "${target_image}:${branch}"
-echo "done." >> "${REPORT}"
+#echo -en "\\nPushing new image... " | tee -a "${REPORT}"
+#echo ""
+#docker image push --quiet "${target_image}:${branch}"
+#echo "done." >> "${REPORT}"
 
 echo -e "\\n#################### Running Image ${TARGET} ####################" | tee -a "${REPORT}"
 if ! docker run --init --cap-add=SYS_PTRACE --shm-size=1g \
