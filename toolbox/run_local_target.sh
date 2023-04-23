@@ -123,29 +123,56 @@ else
 fi
 
 # Build the image.
-if ! docker buildx build \
-       --memory "${MEMORY_LIMIT_MB}m" \
-       "${cache_from_flags[@]}" \
-       --cache-to "type=inline" \
-       --push \
-       --tag "${target_image}:${branch}" \
-       --file ".${DOCKERFILE}" \
-       --shm-size=1g \
-       --progress=plain \
-       "${build_args_flags[@]}" ".${BUILD_PATH}" |& \
-       /opt/cp2kci-toolbox/filter_buildkit_progress.py | tee -a "${REPORT}" ; then
-
-  # Build failed, salvage last succesful step.
-  last_layer=$(docker images --quiet | head -n 1)
-  docker tag "${last_layer}" "${target_image}:${branch}"
-  echo -en "\\nPushing image of last succesful step ${last_layer}... " | tee -a "${REPORT}"
-  echo ""
-  docker image push --quiet "${target_image}:${branch}"
-  echo "done." >> "${REPORT}"
-  # Write error report and quit.
-  echo -e "\\nSummary: Docker build had non-zero exit status.\\nStatus: FAILED" | tee -a "${REPORT}"
-  upload_final_report
-  exit 0  # Prevent crash looping.
+if (( NUM_GPUS_REQUIRED == 0 )) ; then
+   # For non-GPU builds we can use the new and shiny BuildKit.
+   if ! docker buildx build \
+          --memory "${MEMORY_LIMIT_MB}m" \
+          "${cache_from_flags[@]}" \
+          --cache-to "type=inline" \
+          --push \
+          --tag "${target_image}:${branch}" \
+          --file ".${DOCKERFILE}" \
+          --shm-size=1g \
+          --progress=plain \
+          "${build_args_flags[@]}" ".${BUILD_PATH}" |& \
+          /opt/cp2kci-toolbox/filter_buildkit_progress.py | tee -a "${REPORT}" ; then
+     # Build failed, salvage last succesful step.
+     last_layer=$(docker images --quiet | head -n 1)
+     docker tag "${last_layer}" "${target_image}:${branch}"
+     echo -en "\\nPushing image of last succesful step ${last_layer}... " | tee -a "${REPORT}"
+     echo ""
+     docker image push --quiet "${target_image}:${branch}"
+     echo "done." >> "${REPORT}"
+     # Write error report and quit.
+     echo -e "\\nSummary: Docker build had non-zero exit status.\\nStatus: FAILED" | tee -a "${REPORT}"
+     upload_final_report
+     exit 0  # Prevent crash looping.
+   fi
+else
+   # For GPU builds we have to use the deprecated legacy builder.
+   # https://github.com/moby/buildkit/issues/1436
+   if [ "${USE_CACHE}" == "yes" ] ; then
+      echo -n "Populating docker build cache... " >> "${REPORT}"
+      docker image pull --quiet "${target_image}:${branch}"
+      docker image pull --quiet "${target_image}:master"
+      echo "done." >> "${REPORT}"
+   fi
+   if ! DOCKER_BUILDKIT=0 docker build \
+          --memory "${MEMORY_LIMIT_MB}m" \
+          --cache-from "${target_image}:master" \
+          --cache-from "${target_image}:${branch}" \
+          --tag "${target_image}:${branch}" \
+          --file ".${DOCKERFILE}" \
+          --shm-size=1g \
+          "${build_args_flags[@]}" ".${BUILD_PATH}" |& tee -a "${REPORT}" ; then
+     # Write error report and quit.
+     echo -e "\\nSummary: Docker build had non-zero exit status.\\nStatus: FAILED" | tee -a "${REPORT}"
+     upload_final_report
+     exit 0  # Prevent crash looping.
+   fi
+   echo -en "\\nPushing new image... " >> "${REPORT}"
+   docker image push --quiet "${target_image}:${branch}"
+   echo "done." >> "${REPORT}"
 fi
 
 echo -e "\\n#################### Running Image ${TARGET} ####################" | tee -a "${REPORT}"
