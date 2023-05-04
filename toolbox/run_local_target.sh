@@ -80,6 +80,7 @@ PROJECT=${PROJECT:-"cp2k-org-project"}
 DOCKER_REPO="us-central1-docker.pkg.dev/${PROJECT}/cp2kci"
 
 target_image="${DOCKER_REPO}/img_${TARGET}"
+cache_image="${DOCKER_REPO}/img_${CACHE_FROM}"
 branch="${GIT_BRANCH//\//-}"
 
 # Update git repo which contains the Dockerfiles.
@@ -98,6 +99,21 @@ echo -e "\\n#################### Building Image ${TARGET} ####################" 
 echo -e "Dockerfile: ${DOCKERFILE}" |& tee -a "${REPORT}"
 echo -e "Build-Path: ${BUILD_PATH}" |& tee -a "${REPORT}"
 echo -e "Build-Args: ${BUILD_ARGS}" |& tee -a "${REPORT}"
+
+if [ "${USE_CACHE}" == "yes" ] ; then
+    echo -e "Build-Cache: Yes\\n" | tee -a "${REPORT}"
+    echo -en "Populating docker build cache... " | tee -a "${REPORT}"
+    echo ""
+    docker image pull --quiet "${target_image}:${branch}"
+    docker image pull --quiet "${target_image}:master"
+    if [ "${CACHE_FROM}" != "" ] ; then
+        docker image pull --quiet "${cache_image}:master"
+    fi
+    echo "done." >> "${REPORT}"
+else
+    echo -e "Build-Cache: No\\n" | tee -a "${REPORT}"
+fi
+
 # Convert BUILD_ARGS into array of flags suitable for docker build.
 build_args_flags=()
 for arg in ${BUILD_ARGS} ; do
@@ -105,81 +121,37 @@ for arg in ${BUILD_ARGS} ; do
     build_args_flags+=("${arg}")
 done
 
-# Prepare cache from flags for docker buildx.
-cache_from_flags=()
-if [ "${USE_CACHE}" == "yes" ] ; then
-    echo -e "Build-Cache: Yes\\n" | tee -a "${REPORT}"
-    # The order of the --cache-from images matters!
-    # Since builds step are usually not reproducible, there can be multiple suitable
-    # layers in the cache. Preferring prevalent images should counteract divergence.
-    if [ "${CACHE_FROM}" != "" ] ; then
-        cache_image="${DOCKER_REPO}/img_${CACHE_FROM}"
-        cache_from_flags+=("--cache-from" "type=registry,ref=${cache_image}:master")
-    fi
-    cache_from_flags+=("--cache-from" "type=registry,ref=${target_image}:master")
-    cache_from_flags+=("--cache-from" "type=registry,ref=${target_image}:${branch}")
-else
-    echo -e "Build-Cache: No\\n" | tee -a "${REPORT}"
-fi
+# Disable buildkit for now because its new output breaks the CI and Dashboard.
+export DOCKER_BUILDKIT=0
 
-# Build the image.
-if (( NUM_GPUS_REQUIRED == 0 )) ; then
-   # For non-GPU builds we can use the new and shiny BuildKit.
-   # Disabling provenance and buildinfo to work around BuildKit's cache issues:
-   #   https://github.com/moby/buildkit/issues/1876
-   #   https://github.com/moby/buildkit/issues/3188
-   #   https://github.com/moby/buildkit/issues/3552
-   #   https://github.com/moby/moby/issues/45036
-   if ! docker buildx build \
-          --memory "${MEMORY_LIMIT_MB}m" \
-          "${cache_from_flags[@]}" \
-          --cache-to "type=inline" \
-          --output "type=registry,buildinfo=false" \
-          --provenance=false \
-          --tag "${target_image}:${branch}" \
-          --file ".${DOCKERFILE}" \
-          --shm-size=1g \
-          --progress=plain \
-          "${build_args_flags[@]}" ".${BUILD_PATH}" |& \
-          /opt/cp2kci-toolbox/filter_buildkit_progress.py | tee -a "${REPORT}" ; then
-     # Build failed, salvage last succesful step.
-     last_layer=$(docker images --quiet | head -n 1)
-     docker tag "${last_layer}" "${target_image}:${branch}"
-     echo -en "\\nPushing image of last succesful step ${last_layer}... " | tee -a "${REPORT}"
-     echo ""
-     docker image push --quiet "${target_image}:${branch}"
-     echo "done." >> "${REPORT}"
-     # Write error report and quit.
-     echo -e "\\nSummary: Docker build had non-zero exit status.\\nStatus: FAILED" | tee -a "${REPORT}"
-     upload_final_report
-     exit 0  # Prevent crash looping.
-   fi
-else
-   # For GPU builds we have to use the deprecated legacy builder.
-   # https://github.com/moby/buildkit/issues/1436
-   if [ "${USE_CACHE}" == "yes" ] ; then
-      echo -n "Populating docker build cache... " >> "${REPORT}"
-      docker image pull --quiet "${target_image}:${branch}"
-      docker image pull --quiet "${target_image}:master"
-      echo "done." >> "${REPORT}"
-   fi
-   if ! DOCKER_BUILDKIT=0 docker build \
-          --memory "${MEMORY_LIMIT_MB}m" \
-          --cache-from "${target_image}:master" \
-          --cache-from "${target_image}:${branch}" \
-          --tag "${target_image}:${branch}" \
-          --file ".${DOCKERFILE}" \
-          --shm-size=1g \
-          "${build_args_flags[@]}" ".${BUILD_PATH}" |& tee -a "${REPORT}" ; then
-     # Write error report and quit.
-     echo -e "\\nSummary: Docker build had non-zero exit status.\\nStatus: FAILED" | tee -a "${REPORT}"
-     upload_final_report
-     exit 0  # Prevent crash looping.
-   fi
-   echo -en "\\nPushing new image... " >> "${REPORT}"
-   docker image push --quiet "${target_image}:${branch}"
-   echo "done." >> "${REPORT}"
+# The order of the --cache-from images matters!
+# Since builds step are usually not reproducible, there can be multiple suitable
+# layers in the cache. Preferring prevalent images should counteract divergence.
+if ! docker build \
+       --memory "${MEMORY_LIMIT_MB}m" \
+       --cache-from "${cache_image}:master" \
+       --cache-from "${target_image}:master" \
+       --cache-from "${target_image}:${branch}" \
+       --tag "${target_image}:${branch}" \
+       --file ".${DOCKERFILE}" \
+       --shm-size=1g \
+       "${build_args_flags[@]}" ".${BUILD_PATH}" |& tee -a "${REPORT}" ; then
+  # Build failed, salvage last succesful step.
+  last_layer=$(docker images --quiet | head -n 1)
+  docker tag "${last_layer}" "${target_image}:${branch}"
+  echo -en "\\nPushing image of last succesful step ${last_layer}... " | tee -a "${REPORT}"
+  echo ""
+  docker image push --quiet "${target_image}:${branch}"
+  echo "done." >> "${REPORT}"
+  # Write error report and quit.
+  echo -e "\\nSummary: Docker build had non-zero exit status.\\nStatus: FAILED" | tee -a "${REPORT}"
+  upload_final_report
+  exit 0  # Prevent crash looping.
 fi
+echo -en "\\nPushing new image... " | tee -a "${REPORT}"
+echo ""
+docker image push --quiet "${target_image}:${branch}"
+echo "done." >> "${REPORT}"
 
 echo -e "\\n#################### Running Image ${TARGET} ####################" | tee -a "${REPORT}"
 if ! docker run --init --cap-add=SYS_PTRACE --shm-size=1g \
