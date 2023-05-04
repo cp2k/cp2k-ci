@@ -125,11 +125,17 @@ fi
 # Build the image.
 if (( NUM_GPUS_REQUIRED == 0 )) ; then
    # For non-GPU builds we can use the new and shiny BuildKit.
+   # Disabling provenance and buildinfo to work around BuildKit's cache issues:
+   #   https://github.com/moby/buildkit/issues/1876
+   #   https://github.com/moby/buildkit/issues/3188
+   #   https://github.com/moby/buildkit/issues/3552
+   #   https://github.com/moby/moby/issues/45036
    if ! docker buildx build \
           --memory "${MEMORY_LIMIT_MB}m" \
           "${cache_from_flags[@]}" \
           --cache-to "type=inline" \
-          --push \
+          --output "type=registry,buildinfo=false" \
+          --provenance=false \
           --tag "${target_image}:${branch}" \
           --file ".${DOCKERFILE}" \
           --shm-size=1g \
