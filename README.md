@@ -34,6 +34,7 @@ The file has the format of the python [configparser](https://docs.python.org/3/l
 ```
 [sdbg]
 display_name: Regtest sdbg
+tags:         daily
 cpu:          32
 nodepools:    pool-t2d-32
 build_path:   /
@@ -47,6 +48,7 @@ The fields have the following meaning. All lists are white-space separated.
 | ------------ | ---------------------------------------------------------------------------------------------|
 | [foo-bar]    | Internal name used e.g. in report url.                                                       |
 | display_name | Visible name of check run.                                                                   |
+| tags         | List of tags, e.g. `asap`, `daily`, or `weekly` used for cron scheduling.                                                  |
 | cpu          | Number of CPUs to allocate for building and running.                                         |
 | gpu          | Number of GPUs to allocate for building and running.                                         |
 | arch         | Architecture of the CPU, possible values are "arm64" and "x86", defaults to "x86".           |
