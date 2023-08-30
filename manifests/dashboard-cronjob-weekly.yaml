@@ -3,9 +3,9 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: cp2kci-dashboard-all-cronjob
+  name: cp2kci-dashboard-cronjob-weekly
 spec:
-  schedule: "3 11,19 *  *  *"
+  schedule: "3  19  *  *  wed"
   jobTemplate:
     spec:
       backoffLimit: 0
@@ -23,7 +23,7 @@ spec:
           containers:
           - name: cp2kci-dashboard-all-cronjob-container
             image: "us-central1-docker.pkg.dev/cp2k-org-project/cp2kci/img_cp2kci_toolbox_x86:latest"
-            command: ["/opt/cp2kci-toolbox/cp2kcictl.py", "submit_all_dashboard_tests"]
+            command: ["/opt/cp2kci-toolbox/cp2kcictl.py", "submit_tagged_dashboard_tests", "weekly"]
             resources:
               requests:
                 cpu: 1m

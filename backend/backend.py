@@ -57,6 +57,11 @@ class SubmitAllDashboardTestsRequest(TypedDict):
     rpc: Literal["submit_all_dashboard_tests"]
 
 
+class SubmitTaggedDashboardTestsRequest(TypedDict):
+    rpc: Literal["submit_tagged_dashboard_tests"]
+    tag: str
+
+
 class SubmitDashboardTestRequest(TypedDict):
     rpc: Literal["submit_dashboard_test"]
     target: TargetName
@@ -97,6 +102,7 @@ RpcRequest = Union[
     EchoRequest,
     UpdateHealthzBeaconRequest,
     SubmitAllDashboardTestsRequest,
+    SubmitTaggedDashboardTestsRequest,
     SubmitDashboardTestRequest,
     SubmitDashboardTestForceRequest,
     SubmitCheckRunRequest,
@@ -175,6 +181,13 @@ def process_rpc(request: RpcRequest) -> None:
         head_sha = gh.get_master_head_sha()
         for target in gh.get_targets():
             submit_dashboard_test(target, head_sha)
+
+    elif request["rpc"] == "submit_tagged_dashboard_tests":
+        gh = GithubUtil("cp2k")
+        head_sha = gh.get_master_head_sha()
+        for target in gh.get_targets():
+            if request["tag"] in target.tags:
+                submit_dashboard_test(target, head_sha)
 
     elif request["rpc"] == "submit_dashboard_test":
         gh = GithubUtil("cp2k")

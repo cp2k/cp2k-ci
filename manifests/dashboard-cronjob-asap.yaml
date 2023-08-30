@@ -3,7 +3,7 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: cp2kci-dashboard-some-cronjob
+  name: cp2kci-dashboard-cronjob-asap
 spec:
   schedule: "*/5  *  *  *  *"
   jobTemplate:
@@ -21,9 +21,9 @@ spec:
             secret:
               secretName: "cronjob-gcp-key"
           containers:
-          - name: cp2kci-dashboard-some-cronjob-container
+          - name: cp2kci-dashboard-all-cronjob-container
             image: "us-central1-docker.pkg.dev/cp2k-org-project/cp2kci/img_cp2kci_toolbox_x86:latest"
-            command: ["/opt/cp2kci-toolbox/cp2kcictl.py", "submit_dashboard_test", "cp2k-sdbg"]
+            command: ["/opt/cp2kci-toolbox/cp2kcictl.py", "submit_tagged_dashboard_tests", "asap"]
             resources:
               requests:
                 cpu: 1m

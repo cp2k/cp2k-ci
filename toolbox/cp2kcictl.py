@@ -22,6 +22,10 @@ def main() -> None:
     if rpc == "submit_all_dashboard_tests":
         message_backend(rpc=rpc)
 
+    elif rpc == "submit_tagged_dashboard_tests":
+        tag = sys.argv[2]
+        message_backend(rpc=rpc, tag=tag)
+
     elif rpc in ("submit_dashboard_test", "submit_dashboard_test_force"):
         target = sys.argv[2]
         message_backend(rpc=rpc, target=target)
@@ -49,6 +53,7 @@ def print_usage() -> None:
     print("                      process_pull_request <repo> <pr> |")
     print("                      submit_dashboard_test <target> |")
     print("                      submit_dashboard_test_force <target> |")
+    print("                      submit_tagged_dashboard_tests <tag> |")
     print("                      submit_all_dashboard_tests ]")
     sys.exit(1)
 

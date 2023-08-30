@@ -33,6 +33,7 @@ class Target:
         self.is_remote = config.has_option(section, "remote_host")
         self.remote_host = config.get(section, "remote_host", fallback="")
         self.remote_cmd = config.get(section, "remote_cmd", fallback="")
+        self.tags = config.get(section, "tags", fallback="").split()
         cache_from_section = config.get(section, "cache_from", fallback="")
         if cache_from_section:
             self.cache_from = TargetName(f"{repo_conf.name}-{cache_from_section}")
