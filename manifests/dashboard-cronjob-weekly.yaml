@@ -5,7 +5,7 @@ kind: CronJob
 metadata:
   name: cp2kci-dashboard-cronjob-weekly
 spec:
-  schedule: "3  11  *  *  wed"
+  schedule: "3  8  *  *  wed"
   jobTemplate:
     spec:
       backoffLimit: 0
