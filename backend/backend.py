@@ -353,8 +353,18 @@ def process_pull_request(
         if target.name in prev_conclusions:
             optional = prev_conclusions[target.name] in ("neutral", "cancelled")
         else:
-            optional = not target.is_required_check
+            optional = not (target.is_required_check or should_trigger(target, gh, pr))
         submit_check_run(target, gh, pr, sender, optional=optional)
+
+
+# ======================================================================================
+def should_trigger(target: Target, gh: GithubUtil, pr: PullRequest) -> bool:
+    if target.trigger_path:
+        trigger_path_re = re.compile(target.trigger_path)
+        for modified_file in gh.iterate_pr_files(pr):
+            if trigger_path_re.search(modified_file["filename"]):
+                return True
+    return False
 
 
 # ======================================================================================

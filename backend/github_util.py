@@ -81,6 +81,7 @@ class User(TypedDict, total=False):
 # ======================================================================================
 class PullRequest(TypedDict, total=False):
     number: PullRequestNumber
+    url: str
     head: Commit
     base: Branch
     created_at: str
@@ -89,6 +90,11 @@ class PullRequest(TypedDict, total=False):
     mergeable: bool
     merge_commit_sha: CommitSha
     user: User
+
+
+# ======================================================================================
+class DiffEntry(TypedDict, total=False):
+    filename: str
 
 
 # ======================================================================================
@@ -268,6 +274,11 @@ class GithubUtil:
     # --------------------------------------------------------------------------
     def iterate_commits(self, url: str) -> Iterator[Commit]:
         for page in self._iterate_pages(url):
+            yield from page
+
+    # --------------------------------------------------------------------------
+    def iterate_pr_files(self, pr: PullRequest) -> Iterator[DiffEntry]:
+        for page in self._iterate_pages(pr["url"] + "/files"):
             yield from page
 
     # --------------------------------------------------------------------------

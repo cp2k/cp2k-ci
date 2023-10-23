@@ -48,7 +48,7 @@ The fields have the following meaning. All lists are white-space separated.
 | ------------ | ---------------------------------------------------------------------------------------------|
 | [foo-bar]    | Internal name used e.g. in report url.                                                       |
 | display_name | Visible name of check run.                                                                   |
-| tags         | List of tags, e.g. `asap`, `daily`, or `weekly` used for cron scheduling.                                                  |
+| tags         | List of tags, e.g. `asap`, `daily`, or `weekly` used for cron scheduling.                    |
 | cpu          | Number of CPUs to allocate for building and running.                                         |
 | gpu          | Number of GPUs to allocate for building and running.                                         |
 | arch         | Architecture of the CPU, possible values are "arm64" and "x86", defaults to "x86".           |
@@ -57,6 +57,7 @@ The fields have the following meaning. All lists are white-space separated.
 | build_path   | Path to build context within given repository.                                               |
 | dockerfile   | Path to Dockerfile within given repository.                                                  |
 | cache_from   | Optional name of target that should be used as additional cache source during the build.     |
+| trigger_path | Regular expression that forces a check run if it matches any of the modified files.          |
 
 
 ## Communication with Containers
