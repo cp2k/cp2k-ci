@@ -2,5 +2,8 @@ flask
 bcrypt
 google-cloud-pubsub
 gunicorn
+aiohttp
+fsspec
+requests
 
 #EOF
