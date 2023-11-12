@@ -672,7 +672,6 @@ def publish_job_to_github(job: V1Job) -> None:
 
     gh = GithubUtil(job_annotations["cp2kci-repository"])
     report_blob = output_bucket.blob(job_annotations["cp2kci-report-path"])
-    artifacts_blob = output_bucket.blob(job_annotations["cp2kci-artifacts-path"])
     check_run: CheckRun = {"status": status, "output": {}}
     if status == "completed":
         report = parse_report(report_blob)
@@ -681,11 +680,13 @@ def publish_job_to_github(job: V1Job) -> None:
         check_run["actions"] = build_restart_actions()
         check_run["output"]["title"] = report.summary
         summary = f"[Detailed Report]({report_blob.public_url})"
-        if artifacts_blob.exists():
+        # Did the run upload artifacts?
+        artifacts_path = job_annotations["cp2kci-artifacts-path"]
+        artifacts_blob = output_bucket.get_blob(artifacts_path)
+        if artifacts_blob:
             size_mib = artifacts_blob.size / 1024 / 1024
             download_url = artifacts_blob.public_url
-            basename = job_annotations["cp2kci-artifacts-path"][:-14]
-            browse_url = f"https://ci.cp2k.org/artifacts/{basename}/"
+            browse_url = f"https://ci.cp2k.org/artifacts/{artifacts_path[:-14]}/"
             summary += f"\n\n[Browse Artifacts]({browse_url})"
             summary += f"\n\n[Download Artifacts ({size_mib:.1f} MiB)]({download_url})"
     else:
