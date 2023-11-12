@@ -169,10 +169,10 @@ fi
 if docker cp my_container:/workspace/artifacts /tmp/ ; then
     echo -en "\\nUploading artifacts... " | tee -a "${REPORT}"
     echo ""
-    ARTIFACTS_TGZ="/tmp/artifacts.tgz"
+    ARTIFACTS_ZIP="/tmp/artifacts.zip"
     cd /tmp/artifacts || exit
-    tar -czf "${ARTIFACTS_TGZ}" -- *
-    upload_file "${ARTIFACTS_UPLOAD_URL}" "${ARTIFACTS_TGZ}" "application/gzip"
+    zip -qr9 "${ARTIFACTS_ZIP}" *
+    upload_file "${ARTIFACTS_UPLOAD_URL}" "${ARTIFACTS_ZIP}" "application/zip"
     echo "done" >> "${REPORT}"
 fi
 

@@ -629,7 +629,7 @@ def publish_job_to_dashboard(job: V1Job) -> None:
 
     src_blob = output_bucket.blob(job_annotations["cp2kci-artifacts-path"])
     if src_blob.exists():
-        dest_blob = output_bucket.blob("dashboard_" + test_name + "_artifacts.tgz")
+        dest_blob = output_bucket.blob("dashboard_" + test_name + "_artifacts.zip")
         dest_blob.rewrite(src_blob)
 
     # update job_annotations

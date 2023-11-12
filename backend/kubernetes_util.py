@@ -110,7 +110,7 @@ class KubernetesUtil:
         short_uuid = str(uuid4())[:8]
         job_name = f"run-{target.name}-{short_uuid}"
         report_path = f"{job_name}_report.txt"
-        artifacts_path = f"{job_name}_artifacts.tgz"
+        artifacts_path = f"{job_name}_artifacts.zip"
 
         # upload waiting message
         report_blob = self.output_bucket.blob(report_path)
@@ -137,7 +137,7 @@ class KubernetesUtil:
         env_vars["GIT_REPO"] = target.repository
         env_vars["REPORT_UPLOAD_URL"] = self.get_upload_url(report_path)
         env_vars["ARTIFACTS_UPLOAD_URL"] = self.get_upload_url(
-            artifacts_path, content_type="application/gzip"
+            artifacts_path, content_type="application/zip"
         )
 
         if target.is_remote:
