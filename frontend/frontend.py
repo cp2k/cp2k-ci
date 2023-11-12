@@ -81,7 +81,7 @@ def message_backend(**args: Any) -> None:
 def artifacts(archive: str, path: str = "") -> Response:
     fs = fsspec.filesystem("https")
     archive_quoted = urllib.parse.quote(archive)
-    url = f"https://storage.googleapis.com/cp2k-ci/{archive_quoted}.zip"
+    url = f"https://storage.googleapis.com/cp2k-ci/{archive_quoted}_artifacts.zip"
     try:
         with fs.open(url, block_size=512 * 1024) as remote_file:
             # Pre-fetch last 512 KiB as this contains the zip archive's directory.

@@ -682,7 +682,12 @@ def publish_job_to_github(job: V1Job) -> None:
         check_run["output"]["title"] = report.summary
         summary = f"[Detailed Report]({report_blob.public_url})"
         if artifacts_blob.exists():
-            summary += f"\n\n[Artifacts]({artifacts_blob.public_url})"
+            size_mib = artifacts_blob.size / 1024 / 1024
+            download_url = artifacts_blob.public_url
+            basename = job_annotations["cp2kci-artifacts-path"][:-14]
+            browse_url = f"https://ci.cp2k.org/artifacts/{basename}/"
+            summary += f"\n\n[Browse Artifacts]({browse_url})"
+            summary += f"\n\n[Download Artifacts ({size_mib:.1f} MiB)]({download_url})"
     else:
         check_run["output"]["title"] = "In Progress..."
         summary = f"[Live Report]({report_blob.public_url}) (updates every 30s)"

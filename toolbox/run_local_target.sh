@@ -171,7 +171,7 @@ if docker cp my_container:/workspace/artifacts /tmp/ ; then
     echo ""
     ARTIFACTS_ZIP="/tmp/artifacts.zip"
     cd /tmp/artifacts || exit
-    zip -qr9 "${ARTIFACTS_ZIP}" *
+    zip -qr9 "${ARTIFACTS_ZIP}" -- *
     upload_file "${ARTIFACTS_UPLOAD_URL}" "${ARTIFACTS_ZIP}" "application/zip"
     echo "done" >> "${REPORT}"
 fi
