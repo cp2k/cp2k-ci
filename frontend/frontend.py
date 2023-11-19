@@ -121,7 +121,7 @@ def browse_zipfile(zip_file: ZipFile, path: str) -> Response:
     if path:
         output += [f"<li><a href='../'>📁 ..<a></li>"]
     for name in sub_dirs:
-        output += [f"<li><a href='./{name}/'>📄 {name}/<a></li>"]
+        output += [f"<li><a href='./{name}/'>📁 {name}/<a></li>"]
     for name in files:
         output += [f"<li><a href='./{name}'>📄 {name}<a></li>"]
     output += [f"</ul>"]
