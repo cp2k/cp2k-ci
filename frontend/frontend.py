@@ -85,8 +85,8 @@ def artifacts(archive: str, path: str = "") -> Response:
     try:
         with fs.open(url, block_size=512 * 1024) as remote_file:
             # Pre-fetch last 512 KiB as this contains the zip archive's directory.
-            pre_fetch = min(512 * 1024, remote_file.size)
-            remote_file.seek(-pre_fetch, os.SEEK_END)
+            prefetch = min(512 * 1024, remote_file.size)
+            remote_file.seek(-prefetch, os.SEEK_END)
             remote_file.read()
             remote_file.seek(0)
             with ZipFile(remote_file) as zip_file:
@@ -100,7 +100,9 @@ def browse_zipfile(zip_file: ZipFile, path: str) -> Response:
     filenames = {i.filename for i in zip_file.infolist() if not i.is_dir()}
 
     if path in filenames:
-        mt = mimetypes.guess_type(path, strict=True)[0]
+        for ext in [".log", ".out", ".inp"]:
+            mimetypes.add_type("text/plain", ext)
+        mt = mimetypes.guess_type(path)[0]
         with zip_file.open(path) as f:
             return Response(f.read(), mimetype=mt)
 
