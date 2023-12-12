@@ -85,7 +85,8 @@ def artifacts(archive: str, path: str = "") -> Response:
     try:
         with fs.open(url, block_size=512 * 1024) as remote_file:
             # Pre-fetch last 512 KiB as this contains the zip archive's directory.
-            remote_file.seek(-512 * 1024, os.SEEK_END)
+            pre_fetch = min(512 * 1024, remote_file.size)
+            remote_file.seek(-pre_fetch, os.SEEK_END)
             remote_file.read()
             remote_file.seek(0)
             with ZipFile(remote_file) as zip_file:
