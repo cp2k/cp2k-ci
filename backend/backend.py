@@ -111,6 +111,7 @@ RpcRequest = Union[
     GithubEventRequest,
 ]
 
+
 # ======================================================================================
 @dataclass
 class Report:
@@ -461,7 +462,7 @@ def submit_check_run(
         pr["merge_commit_sha"],
         job_annotations,
         use_cache=use_cache,
-        priority="high-priority",
+        # priority="high-priority",
     )
 
 
