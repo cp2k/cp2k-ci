@@ -78,7 +78,7 @@ class KubernetesUtil:
 
     # --------------------------------------------------------------------------
     def resources(self, target: Target) -> V1ResourceRequirements:
-        req_cpu = 0.95 * target.cpu  # Request 5% less to leave some for kubernetes.
+        req_cpu = 0.9 * target.cpu  # Request 10% less to leave some for kubernetes.
         return self.api.V1ResourceRequirements(
             requests={"cpu": str(req_cpu)}, limits={"nvidia.com/gpu": str(target.gpu)}
         )
