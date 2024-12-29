@@ -6,6 +6,7 @@ import configparser
 
 from repository_config import RepositoryConfig
 
+
 # ======================================================================================
 class TargetName(str):
     pass

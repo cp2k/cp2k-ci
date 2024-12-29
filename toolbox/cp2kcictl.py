@@ -13,6 +13,7 @@ project = google.auth.default()[1]
 publish_client = google.cloud.pubsub.PublisherClient()
 pubsub_topic = "projects/" + project + "/topics/cp2kci-topic"
 
+
 # ======================================================================================
 def main() -> None:
     if len(sys.argv) < 2:

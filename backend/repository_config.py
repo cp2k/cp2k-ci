@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import List
 
+
 # ======================================================================================
 @dataclass
 class RepositoryConfig:
@@ -20,6 +21,7 @@ REPOSITORY_CONFIGS: List[RepositoryConfig] = [
         required_checks=["precommit", "misc", "sdbg"],
     )
 ]
+
 
 # ======================================================================================
 def get_repository_config_by_name(name: str) -> RepositoryConfig:

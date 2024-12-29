@@ -517,6 +517,11 @@ def submit_dashboard_test(target: Target, head_sha: str, force: bool = False) ->
                 print(f"Found already underway dashboard job for: {target.name}.")
                 return  # Do not submit another job.
 
+        if get_dashboard_report_age(target.name) < timedelta(minutes=10):
+            # https://github.com/cp2k/cp2k/blob/c7c47bf/tools/docker/generate_dockerfiles.py#L349
+            print(f"Found too recent dashboard report for: {target.name}.")
+            return  # Hold off to avoid confusing the report cache.
+
         if get_dashboard_report_sha(target.name) == head_sha:
             print(f"Found up-to-date dashboard report for: {target.name}.")
             return  # No need to submit another job.
@@ -534,6 +539,16 @@ def submit_dashboard_test(target: Target, head_sha: str, force: bool = False) ->
 
 
 # ======================================================================================
+def get_dashboard_report_age(target_name: TargetName) -> datetime:
+    assert target_name.startswith("cp2k-")
+    test_name = target_name[5:]
+    blob = output_bucket.get_blob("dashboard_" + test_name + "_report.txt")
+    if blob:
+        return datetime.now(timezone.utc) - blob.updated
+    return timedelta.max  # Blob not found.
+
+
+# ======================================================================================
 def get_dashboard_report_sha(target_name: TargetName) -> Optional[str]:
     assert target_name.startswith("cp2k-")
     test_name = target_name[5:]
@@ -547,7 +562,7 @@ def get_dashboard_report_sha(target_name: TargetName) -> Optional[str]:
         if m:
             return str(m.group(2))
 
-    return None  # CommitSHA not found.
+    return None  # Blob or CommitSHA not found.
 
 
 # ======================================================================================
