@@ -169,6 +169,19 @@ class KubernetesUtil:
                 )
             )
 
+        # spack build cache volume
+        # https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/cloud-storage-fuse-csi-driver
+        if not target.is_remote:
+            spack_volname = "volume-spack-" + job_name
+            spack_volsrc = self.api.V1CSIVolumeSource(
+                driver="gcsfuse.csi.storage.gke.io",
+                volume_attributes={"bucketName": "cp2k-spack-buildcache"},
+            )
+            volumes.append(self.api.V1Volume(name=spack_volname, csi=spack_volsrc))
+            volume_mounts.append(
+                self.api.V1VolumeMount(name=spack_volname, mount_path="/spack-cache")
+            )
+
         # gcp secret volume
         gcp_secret_volname = "runner-gcp-key-volume"
         gcp_secret_volsrc = self.api.V1SecretVolumeSource(secret_name="runner-gcp-key")
@@ -217,6 +230,11 @@ class KubernetesUtil:
         tol_costly = self.api.V1Toleration(key="costly", operator="Exists")
         tol_arch = self.api.V1Toleration(key="kubernetes.io/arch", value=target.arch)
 
+        # pod metadata
+        pod_metadata = self.api.V1ObjectMeta(
+            annotations={"gke-gcsfuse/volumes": "true"}
+        )
+
         # pod
         pod_spec = self.api.V1PodSpec(
             containers=[container],
@@ -229,9 +247,9 @@ class KubernetesUtil:
             automount_service_account_token=False,
             priority_class_name=priority,
         )
-        pod_template = self.api.V1PodTemplateSpec(spec=pod_spec)
+        pod_template = self.api.V1PodTemplateSpec(spec=pod_spec, metadata=pod_metadata)
 
-        # metadata
+        # job metadata
         job_metadata = self.api.V1ObjectMeta(
             name=job_name, labels={"cp2kci": "run"}, annotations=job_annotations
         )
