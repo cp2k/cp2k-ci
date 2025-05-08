@@ -20,7 +20,9 @@ gcloud container clusters create $CLUSTER_NAME \
    --autoscaling-profile optimize-utilization \
    --enable-autorepair \
    --enable-autoupgrade \
-   --maintenance-window 3:00
+   --maintenance-window 3:00 \
+   --workload-pool="cp2k-org-project.svc.id.goog" \
+   --workload-metadata=GKE_METADATA
 
 gcloud config set container/cluster ${CLUSTER_NAME}
 gcloud container clusters get-credentials ${CLUSTER_NAME}

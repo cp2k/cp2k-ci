@@ -31,6 +31,7 @@ done
 # TODO: Checkout c3-standard-22 instances once they are generally available.
 gcloud container node-pools delete --cluster="${CLUSTER_NAME}" --quiet pool-c2-30
 gcloud container node-pools create pool-c2-30 "${DEFAULT_ARGS[@]}" \
+    --workload-metadata=GKE_METADATA \
     --machine-type="c2-standard-30" \
     --total-max-nodes=4
 
@@ -40,6 +41,7 @@ gcloud container node-pools create pool-c2-30 "${DEFAULT_ARGS[@]}" \
 # Note T2A is not available in us-central1-c.
 gcloud container node-pools delete --cluster="${CLUSTER_NAME}" --quiet pool-t2a-16
 gcloud container node-pools create pool-t2a-16 "${DEFAULT_ARGS[@]}" \
+    --workload-metadata=GKE_METADATA \
     --node-locations="us-central1-a,us-central1-b,us-central1-f" \
     --machine-type="t2a-standard-16"
 
@@ -48,6 +50,7 @@ gcloud container node-pools create pool-t2a-16 "${DEFAULT_ARGS[@]}" \
 # Note Tesla P4 is not available in us-central1-b and us-central1-f.
 gcloud container node-pools delete --cluster="${CLUSTER_NAME}" --quiet pool-p4-skylake-24
 gcloud container node-pools create pool-p4-skylake-24  "${DEFAULT_ARGS[@]}" \
+    --workload-metadata=GKE_METADATA \
     --node-locations="us-central1-a,us-central1-c" \
     --machine-type="custom-24-92160" \
     --accelerator="type=nvidia-tesla-p4,count=1" \
@@ -58,6 +61,7 @@ gcloud container node-pools create pool-p4-skylake-24  "${DEFAULT_ARGS[@]}" \
 # Using custom type with same 3.75GB/vCPU ratio.
 gcloud container node-pools delete --cluster="${CLUSTER_NAME}" --quiet pool-v100-skylake-12
 gcloud container node-pools create pool-v100-skylake-12 "${DEFAULT_ARGS[@]}" \
+    --workload-metadata=GKE_METADATA \
     --machine-type="custom-12-46080" \
     --accelerator="type=nvidia-tesla-v100,count=1" \
     --min-cpu-platform="Intel Skylake"

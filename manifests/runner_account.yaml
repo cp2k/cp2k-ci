@@ -1,0 +1,11 @@
+# author: Ole Schuett
+
+apiVersion: "v1"
+kind: "ServiceAccount"
+metadata:
+  name: "cp2kci-runner-k8s-account"
+  annotations:
+    iam.gke.io/gcp-service-account: "cp2kci-runner@cp2k-org-project.iam.gserviceaccount.com"
+automountServiceAccountToken: False
+
+#EOF

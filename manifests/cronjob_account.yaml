@@ -1,0 +1,11 @@
+# author: Ole Schuett
+
+apiVersion: "v1"
+kind: "ServiceAccount"
+metadata:
+  name: "cp2kci-cronjob-k8s-account"
+  annotations:
+    iam.gke.io/gcp-service-account: "cp2kci-cronjob@cp2k-org-project.iam.gserviceaccount.com"
+automountServiceAccountToken: False
+
+#EOF

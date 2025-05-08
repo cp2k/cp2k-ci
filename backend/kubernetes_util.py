@@ -146,7 +146,7 @@ class KubernetesUtil:
         else:
             env_vars["DOCKERFILE"] = target.dockerfile
             env_vars["BUILD_PATH"] = target.build_path
-            build_args = f"{target.build_args} GIT_COMMIT_SHA={git_ref}"
+            build_args = f"{target.build_args} GIT_COMMIT_SHA={git_ref} SPACK_CACHE=gs://cp2k-spack-cache"
             env_vars["BUILD_ARGS"] = build_args.strip()
             env_vars["USE_CACHE"] = "yes" if use_cache else "no"
             env_vars["CACHE_FROM"] = target.cache_from
@@ -168,34 +168,6 @@ class KubernetesUtil:
                     name=docker_volname, mount_path="/var/lib/docker"
                 )
             )
-
-        # spack build cache volume
-        # https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/cloud-storage-fuse-csi-driver
-        # if not target.is_remote:
-        #    spack_volname = "volume-spack-" + job_name
-        #    spack_volsrc = self.api.V1CSIVolumeSource(
-        #        driver="gcsfuse.csi.storage.gke.io",
-        #        volume_attributes={"bucketName": "cp2k-spack-buildcache"},
-        #    )
-        #    volumes.append(self.api.V1Volume(name=spack_volname, csi=spack_volsrc))
-        #    volume_mounts.append(
-        #        self.api.V1VolumeMount(name=spack_volname, mount_path="/spack-cache")
-        #    )
-
-        # gcp secret volume
-        gcp_secret_volname = "runner-gcp-key-volume"
-        gcp_secret_volsrc = self.api.V1SecretVolumeSource(secret_name="runner-gcp-key")
-        volumes.append(
-            self.api.V1Volume(name=gcp_secret_volname, secret=gcp_secret_volsrc)
-        )
-        volume_mounts.append(
-            self.api.V1VolumeMount(
-                name=gcp_secret_volname,
-                mount_path="/var/secrets/google",
-                read_only=True,
-            )
-        )
-        env_vars["GOOGLE_APPLICATION_CREDENTIALS"] = "/var/secrets/google/key.json"
 
         # ssh secret volume
         if target.is_remote:
@@ -230,11 +202,6 @@ class KubernetesUtil:
         tol_costly = self.api.V1Toleration(key="costly", operator="Exists")
         tol_arch = self.api.V1Toleration(key="kubernetes.io/arch", value=target.arch)
 
-        # pod metadata
-        pod_metadata = self.api.V1ObjectMeta(
-            # annotations={"gke-gcsfuse/volumes": "true"}
-        )
-
         # pod
         pod_spec = self.api.V1PodSpec(
             containers=[container],
@@ -245,9 +212,10 @@ class KubernetesUtil:
             dns_policy="Default",  # bypass kube-dns
             affinity=self.affinity(target),
             automount_service_account_token=False,
+            service_account_name="cp2kci-runner-k8s-account",
             priority_class_name=priority,
         )
-        pod_template = self.api.V1PodTemplateSpec(spec=pod_spec, metadata=pod_metadata)
+        pod_template = self.api.V1PodTemplateSpec(spec=pod_spec)
 
         # job metadata
         job_metadata = self.api.V1ObjectMeta(

@@ -25,15 +25,21 @@ gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${B
 
 # runner
 gcloud artifacts repositories add-iam-policy-binding "cp2kci" --member="serviceAccount:${RUNNER_ACCOUNT}" --role="roles/artifactregistry.writer" --location="us-central1"  # for uploading docker images
+gcloud storage buckets add-iam-policy-binding gs://cp2k-spack-cache --member="serviceAccount:${RUNNER_ACCOUNT}" --role="roles/storage.objectAdmin"
 
 # cronjob
-gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${CRONJOB_ACCOUNT}" --role="roles/storage.admin"              # for uploading usage_stats.txt
-gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${CRONJOB_ACCOUNT}" --role="roles/pubsub.publisher"           # for sending messsages to backend
+gcloud storage buckets add-iam-policy-binding gs://cp2k-ci  --member="serviceAccount:${CRONJOB_ACCOUNT}" --role="roles/storage.objectAdmin"  # for uploading usage_stats.txt
+gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${CRONJOB_ACCOUNT}"  --role="roles/pubsub.publisher"     # for sending messsages to backend
 gcloud artifacts repositories add-iam-policy-binding "cp2kci" --member="serviceAccount:${CRONJOB_ACCOUNT}" --role="roles/artifactregistry.repoAdmin" --location="us-central1"  # for removing old images
 
 # cloud builder
 gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${CLOUDBUILD_ACCOUNT}" --role="roles/run.admin"               # for updating frontend container
 gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${CLOUDBUILD_ACCOUNT}" --role="roles/container.developer"     # for updating backend container
 gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${CLOUDBUILD_ACCOUNT}" --role="roles/iam.serviceAccountUser"  # somehow required too
+
+# Map the Kubernetes service account to the corresponding GCP account. Note that the GCP account is treated as a ressource here.
+gcloud iam service-accounts add-iam-policy-binding "${BACKEND_ACCOUNT}" --member="serviceAccount:${PROJECT}.svc.id.goog[default/cp2kci-backend-k8s-account]" --role="roles/iam.workloadIdentityUser"
+gcloud iam service-accounts add-iam-policy-binding "${RUNNER_ACCOUNT}" --member="serviceAccount:${PROJECT}.svc.id.goog[default/cp2kci-runner-k8s-account]" --role="roles/iam.workloadIdentityUser"
+gcloud iam service-accounts add-iam-policy-binding "${CRONJOB_ACCOUNT}" --member="serviceAccount:${PROJECT}.svc.id.goog[default/cp2kci-cronjob-k8s-account]" --role="roles/iam.workloadIdentityUser"
 
 #EOF
