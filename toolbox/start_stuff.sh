@@ -36,12 +36,6 @@ fi
 
 docker info
 
-#https://issuetracker.google.com/issues/38098801
-gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
-#gcloud auth list
-#gcloud config list account
-
-
 gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
 #EOF
