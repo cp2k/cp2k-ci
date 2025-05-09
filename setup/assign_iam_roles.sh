@@ -23,7 +23,7 @@ gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${C
 gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${FRONTEND_ACCOUNT}"  --role="roles/pubsub.publisher"  # for sending message to backend
 
 # backend
-gcloud storage buckets add-iam-policy-binding gs://cp2k-ci  --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/storage.objectAdmin"  # for singing upload urls
+gcloud storage buckets add-iam-policy-binding gs://cp2k-ci  --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/storage.admin"        # for singing upload urls
 gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${BACKEND_ACCOUNT}"  --role="roles/pubsub.subscriber"    # for receiving messages from frontend
 gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${BACKEND_ACCOUNT}"  --role="roles/pubsub.viewer"        # for receiving messages from frontend
 

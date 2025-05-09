@@ -43,7 +43,9 @@ class KubernetesUtil:
         blob = self.output_bucket.blob(path)
         request = google.auth.transport.requests.Request()
         credentials = google.auth.compute_engine.IDTokenCredentials(
-            request=request, target_audience="", use_metadata_identity_endpoint=True
+            request=request,
+            target_audience="",
+            service_account_email="cp2kci-backend@cp2k-org-project.iam.gserviceaccount.com",
         )
         upload_url = blob.generate_signed_url(
             expiration,
