@@ -4,9 +4,6 @@
 
 # Remove old GCP container images.
 
-#https://issuetracker.google.com/issues/38098801
-gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
-
 echo "Looking for old images..."
 
 DOCKER_REPO="us-central1-docker.pkg.dev/cp2k-org-project/cp2kci"
