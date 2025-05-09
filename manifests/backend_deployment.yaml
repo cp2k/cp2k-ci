@@ -21,9 +21,6 @@ spec:
       nodeSelector:
         node.kubernetes.io/instance-type: n2d-standard-2
       volumes:
-      - name: backend-gcp-key-volume
-        secret:
-          secretName: "backend-gcp-key"
       - name: github-app-key-volume
         secret:
           secretName: "github-app-key"
@@ -41,13 +38,9 @@ spec:
           value: '16828'
         - name: GITHUB_APP_INSTALL_ID
           value: '312256'
-        - name: GOOGLE_APPLICATION_CREDENTIALS
-          value: '/var/secrets/google/key.json'
         - name: GITHUB_APP_KEY
           value: '/var/secrets/github-app-key/github-app-key.pem'
         volumeMounts:
-        - name: backend-gcp-key-volume
-          mountPath: "/var/secrets/google"
         - name: github-app-key-volume
           mountPath: "/var/secrets/github-app-key"
         #livenessProbe:

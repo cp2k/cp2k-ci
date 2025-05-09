@@ -14,14 +14,18 @@ CRONJOB_ACCOUNT="cp2kci-cronjob@${PROJECT}.iam.gserviceaccount.com"
 
 set -x
 
+# cloud builder
+gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${CLOUDBUILD_ACCOUNT}" --role="roles/run.admin"               # for updating frontend container
+gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${CLOUDBUILD_ACCOUNT}" --role="roles/container.developer"     # for updating backend container
+gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${CLOUDBUILD_ACCOUNT}" --role="roles/iam.serviceAccountUser"  # somehow required too
+
 # frontend
-gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${FRONTEND_ACCOUNT}" --role="roles/pubsub.publisher"          # for sending message to backend
+gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${FRONTEND_ACCOUNT}"  --role="roles/pubsub.publisher"  # for sending message to backend
 
 # backend
-#TODO roles/storage.objectAdmin should be enough, but it's missing the storage.buckets.get permission.
-gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/storage.admin"              # for singing upload urls
-gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/pubsub.subscriber"          # for receiving messages from frontend
-gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/pubsub.viewer"              # for receiving messages from frontend
+gcloud storage buckets add-iam-policy-binding gs://cp2k-ci  --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/storage.objectAdmin"  # for singing upload urls
+gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${BACKEND_ACCOUNT}"  --role="roles/pubsub.subscriber"    # for receiving messages from frontend
+gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${BACKEND_ACCOUNT}"  --role="roles/pubsub.viewer"        # for receiving messages from frontend
 
 # runner
 gcloud artifacts repositories add-iam-policy-binding "cp2kci" --member="serviceAccount:${RUNNER_ACCOUNT}" --role="roles/artifactregistry.writer" --location="us-central1"  # for uploading docker images
@@ -31,11 +35,6 @@ gcloud storage buckets add-iam-policy-binding gs://cp2k-spack-cache --member="se
 gcloud storage buckets add-iam-policy-binding gs://cp2k-ci  --member="serviceAccount:${CRONJOB_ACCOUNT}" --role="roles/storage.objectAdmin"  # for uploading usage_stats.txt
 gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${CRONJOB_ACCOUNT}"  --role="roles/pubsub.publisher"     # for sending messsages to backend
 gcloud artifacts repositories add-iam-policy-binding "cp2kci" --member="serviceAccount:${CRONJOB_ACCOUNT}" --role="roles/artifactregistry.repoAdmin" --location="us-central1"  # for removing old images
-
-# cloud builder
-gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${CLOUDBUILD_ACCOUNT}" --role="roles/run.admin"               # for updating frontend container
-gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${CLOUDBUILD_ACCOUNT}" --role="roles/container.developer"     # for updating backend container
-gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${CLOUDBUILD_ACCOUNT}" --role="roles/iam.serviceAccountUser"  # somehow required too
 
 # Map the Kubernetes service account to the corresponding GCP account. Note that the GCP account is treated as a ressource here.
 gcloud iam service-accounts add-iam-policy-binding "${BACKEND_ACCOUNT}" --member="serviceAccount:${PROJECT}.svc.id.goog[default/cp2kci-backend-k8s-account]" --role="roles/iam.workloadIdentityUser"

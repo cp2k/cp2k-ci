@@ -13,6 +13,9 @@ from kubernetes.client.models.v1_resource_requirements import V1ResourceRequirem
 from kubernetes.client.models.v1_affinity import V1Affinity
 from kubernetes.client.models.v1_job_list import V1JobList
 
+import google.auth.transport.requests
+import google.auth.compute_engine
+
 
 class KubernetesUtil:
     def __init__(
@@ -38,8 +41,16 @@ class KubernetesUtil:
     ) -> str:
         expiration = datetime.utcnow() + timedelta(hours=12)
         blob = self.output_bucket.blob(path)
+        request = google.auth.transport.requests.Request()
+        credentials = google.auth.compute_engine.IDTokenCredentials(
+            request=request, target_audience="", use_metadata_identity_endpoint=True
+        )
         upload_url = blob.generate_signed_url(
-            expiration, method="PUT", content_type=content_type
+            expiration,
+            method="PUT",
+            content_type=content_type,
+            credentials=credentials,
+            version="v4",
         )
         return str(upload_url)
 
