@@ -23,9 +23,9 @@ gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${C
 gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${FRONTEND_ACCOUNT}"  --role="roles/pubsub.publisher"  # for sending message to backend
 
 # backend
-gcloud storage buckets add-iam-policy-binding gs://cp2k-ci  --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/storage.admin"        # for uploading empty reports
-gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${BACKEND_ACCOUNT}"  --role="roles/pubsub.subscriber"    # for receiving messages from frontend
-gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${BACKEND_ACCOUNT}"  --role="roles/pubsub.viewer"        # for receiving messages from frontend
+gcloud storage buckets add-iam-policy-binding gs://cp2k-ci --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/storage.admin"                    # for uploading empty reports
+gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/pubsub.viewer"                    # for receiving messages from frontend
+gcloud pubsub subscriptions add-iam-policy-binding "cp2kci-subscription" --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/pubsub.subscriber"  # for receiving messages from frontend
 gcloud iam service-accounts add-iam-policy-binding "${BACKEND_ACCOUNT}" --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/iam.serviceAccountTokenCreator"  # for singing upload urls
 
 
