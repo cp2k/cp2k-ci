@@ -23,16 +23,18 @@ gcloud projects add-iam-policy-binding "${PROJECT}" --member="serviceAccount:${C
 gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${FRONTEND_ACCOUNT}"  --role="roles/pubsub.publisher"  # for sending message to backend
 
 # backend
-gcloud storage buckets add-iam-policy-binding gs://cp2k-ci  --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/storage.admin"        # for singing upload urls
+gcloud storage buckets add-iam-policy-binding gs://cp2k-ci  --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/storage.admin"        # for uploading empty reports
 gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${BACKEND_ACCOUNT}"  --role="roles/pubsub.subscriber"    # for receiving messages from frontend
 gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${BACKEND_ACCOUNT}"  --role="roles/pubsub.viewer"        # for receiving messages from frontend
+gcloud iam service-accounts add-iam-policy-binding "${BACKEND_ACCOUNT}" --member="serviceAccount:${BACKEND_ACCOUNT}" --role="roles/iam.serviceAccountTokenCreator"  # for singing upload urls
+
 
 # runner
 gcloud artifacts repositories add-iam-policy-binding "cp2kci" --member="serviceAccount:${RUNNER_ACCOUNT}" --role="roles/artifactregistry.writer" --location="us-central1"  # for uploading docker images
 gcloud storage buckets add-iam-policy-binding gs://cp2k-spack-cache --member="serviceAccount:${RUNNER_ACCOUNT}" --role="roles/storage.objectAdmin"
 
 # cronjob
-gcloud storage buckets add-iam-policy-binding gs://cp2k-ci  --member="serviceAccount:${CRONJOB_ACCOUNT}" --role="roles/storage.objectAdmin"  # for uploading usage_stats.txt
+gcloud storage buckets add-iam-policy-binding gs://cp2k-ci  --member="serviceAccount:${CRONJOB_ACCOUNT}" --role="roles/storage.admin"        # for uploading usage_stats.txt
 gcloud pubsub topics add-iam-policy-binding "cp2kci-topic" --member="serviceAccount:${CRONJOB_ACCOUNT}"  --role="roles/pubsub.publisher"     # for sending messsages to backend
 gcloud artifacts repositories add-iam-policy-binding "cp2kci" --member="serviceAccount:${CRONJOB_ACCOUNT}" --role="roles/artifactregistry.repoAdmin" --location="us-central1"  # for removing old images
 

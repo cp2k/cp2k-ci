@@ -39,19 +39,22 @@ class KubernetesUtil:
     def get_upload_url(
         self, path: str, content_type: str = "text/plain;charset=utf-8"
     ) -> str:
-        expiration = datetime.utcnow() + timedelta(hours=12)
-        blob = self.output_bucket.blob(path)
-        request = google.auth.transport.requests.Request()
-        credentials = google.auth.compute_engine.IDTokenCredentials(
-            request=request,
+        # Get credentials.
+        credentials, _ = google.auth.default()
+        auth_request = google.auth.transport.requests.Request()
+        credentials.refresh(auth_request)
+        signing_credentials = google.auth.compute_engine.IDTokenCredentials(
+            request=auth_request,
             target_audience="",
             service_account_email="cp2kci-backend@cp2k-org-project.iam.gserviceaccount.com",
         )
+        # Sign the URL.
+        blob = self.output_bucket.blob(path)
         upload_url = blob.generate_signed_url(
-            expiration,
+            expiration=datetime.utcnow() + timedelta(hours=12),
             method="PUT",
             content_type=content_type,
-            credentials=credentials,
+            credentials=signing_credentials,
             version="v4",
         )
         return str(upload_url)

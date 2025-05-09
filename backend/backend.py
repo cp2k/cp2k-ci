@@ -32,6 +32,7 @@ import google.auth  # type: ignore
 import google.cloud.pubsub  # type: ignore
 import google.cloud.storage  # type: ignore
 
+
 gcp_project = google.auth.default()[1]
 storage_client = google.cloud.storage.Client(project=gcp_project)
 subscriber_client = google.cloud.pubsub.SubscriberClient()
