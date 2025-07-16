@@ -3,9 +3,9 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: cp2kci-dashboard-cronjob-weekly
+  name: cp2kci-dashboard-cronjob-weekly-morning
 spec:
-  schedule: "3  8  *  *  wed"
+  schedule: "3  10  *  *  wed"
   jobTemplate:
     spec:
       backoffLimit: 0
@@ -20,9 +20,37 @@ spec:
           containers:
           - name: cp2kci-dashboard-all-cronjob-container
             image: "us-central1-docker.pkg.dev/cp2k-org-project/cp2kci/img_cp2kci_toolbox_x86:latest"
-            command: ["/opt/cp2kci-toolbox/cp2kcictl.py", "submit_tagged_dashboard_tests", "weekly"]
+            command: ["/opt/cp2kci-toolbox/cp2kcictl.py", "submit_tagged_dashboard_tests", "weekly-morning"]
             resources:
               requests:
                 cpu: 1m
+
+---
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cp2kci-dashboard-cronjob-weekly-afternoon
+spec:
+  schedule: "3  14  *  *  wed"
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: False
+          serviceAccountName: cp2kci-cronjob-k8s-account
+          dnsPolicy: Default
+          nodeSelector:
+            node.kubernetes.io/instance-type: n2d-standard-2
+          containers:
+          - name: cp2kci-dashboard-all-cronjob-container
+            image: "us-central1-docker.pkg.dev/cp2k-org-project/cp2kci/img_cp2kci_toolbox_x86:latest"
+            command: ["/opt/cp2kci-toolbox/cp2kcictl.py", "submit_tagged_dashboard_tests", "weekly-afternoon"]
+            resources:
+              requests:
+                cpu: 1m
+
 
 #EOF
