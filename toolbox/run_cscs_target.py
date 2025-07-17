@@ -57,7 +57,7 @@ def main():
             href = link.get("href")
             if href.startswith("/ci/job/result/"):
                 bar = "=" * 25
-                output += ["", f" {bar} {link.get_text().center(35)} {bar}", ""]
+                output += ["", f" {bar} {link.get_text().upper().center(35)} {bar}", ""]
                 job_result_html = get_url(f"https://cicd-ext-mw.cscs.ch{href}")
                 soup = BeautifulSoup(job_result_html, "html.parser")
                 for pre in soup.find_all("pre"):
