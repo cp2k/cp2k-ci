@@ -27,5 +27,6 @@ rm key.json
 # some more secrets
 kubectl create secret generic github-app-key --from-file="github-app-key.pem"
 kubectl create secret generic ssh-config --from-file=./ssh_config/
+kubectl create secret generic cscs-ci --from-literal="username=<foo>" --from-literal="password=<bar>"
 
 #EOF

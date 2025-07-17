@@ -1,4 +1,6 @@
 google-cloud-pubsub
 google-cloud-storage
+beautifulsoup4
+requests
 
 #EOF

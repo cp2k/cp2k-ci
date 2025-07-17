@@ -156,10 +156,12 @@ class KubernetesUtil:
             artifacts_path, content_type="application/zip"
         )
 
-        if target.is_remote:
+        if target.runner == "remote":
             env_vars["REMOTE_HOST"] = target.remote_host
             env_vars["REMOTE_CMD"] = target.remote_cmd
-        else:
+        elif target.runner == "cscs":
+            env_vars["CSCS_PIPELINE"] = target.cscs_pipeline
+        elif target.runner == "local":
             env_vars["DOCKERFILE"] = target.dockerfile
             env_vars["BUILD_PATH"] = target.build_path
             build_args = f"{target.build_args} GIT_COMMIT_SHA={git_ref} SPACK_CACHE=gs://cp2k-spack-cache"
@@ -173,7 +175,7 @@ class KubernetesUtil:
         volume_mounts = []
 
         # docker volume (needed for performance)
-        if not target.is_remote:
+        if target.runner == "local":
             docker_volname = "volume-docker-" + job_name
             docker_volsrc = self.api.V1EmptyDirVolumeSource()
             volumes.append(
@@ -186,7 +188,7 @@ class KubernetesUtil:
             )
 
         # ssh secret volume
-        if target.is_remote:
+        if target.runner == "remote":
             ssh_secret_volname = "ssh-config-volume"
             ssh_secret_volsrc = self.api.V1SecretVolumeSource(
                 secret_name="ssh-config", default_mode=0o0600
@@ -200,15 +202,31 @@ class KubernetesUtil:
                 )
             )
 
+        # cscs-ci secret volume
+        if target.runner == "cscs":
+            cscs_secret_volname = "cscs-ci-volume"
+            cscs_secret_volsrc = self.api.V1SecretVolumeSource(
+                secret_name="cscs-ci", default_mode=0o0600
+            )
+            volumes.append(
+                self.api.V1Volume(name=cscs_secret_volname, secret=cscs_secret_volsrc)
+            )
+            volume_mounts.append(
+                self.api.V1VolumeMount(
+                    name=cscs_secret_volname,
+                    mount_path="/var/secrets/cscs-ci",
+                    read_only=True,
+                )
+            )
+
         # container with privileged=True as needed by docker build
         privileged = self.api.V1SecurityContext(privileged=True)
         k8s_env_vars = [self.api.V1EnvVar(k, v) for k, v in env_vars.items()]
-        cmd = "./run_remote_target.sh" if target.is_remote else "./run_local_target.sh"
         container = self.api.V1Container(
             name="main",
             image=f"{self.image_base}/img_cp2kci_toolbox_{target.arch}:latest",
             resources=self.resources(target),
-            command=[cmd],
+            command=[f"./run_{target.runner}_target.sh"],
             volume_mounts=volume_mounts,
             security_context=privileged,
             env=k8s_env_vars,

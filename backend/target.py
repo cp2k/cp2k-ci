@@ -32,15 +32,23 @@ class Target:
         self.build_path = config.get(section, "build_path")
         self.arch = config.get(section, "arch", fallback="x86")
         self.build_args = config.get(section, "build_args", fallback="")
-        self.is_remote = config.has_option(section, "remote_host")
         self.remote_host = config.get(section, "remote_host", fallback="")
         self.remote_cmd = config.get(section, "remote_cmd", fallback="")
+        self.cscs_pipeline = config.get(section, "cscs_pipeline", fallback="")
         self.tags = config.get(section, "tags", fallback="").split()
+
         cache_from_section = config.get(section, "cache_from", fallback="")
         if cache_from_section:
             self.cache_from = TargetName(f"{repo_conf.name}-{cache_from_section}")
         else:
             self.cache_from = TargetName("")
+
+        if config.has_option(section, "remote_host"):
+            self.runner = "remote"
+        elif config.has_option(section, "cscs_pipeline"):
+            self.runner = "cscs"
+        else:
+            self.runner = "local"
 
 
 # ======================================================================================
