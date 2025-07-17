@@ -22,14 +22,18 @@ class Target:
     ):
         self.repository = repo_conf.name
         self.name = TargetName(f"{repo_conf.name}-{section}")
-        self.display_name = config.get(section, "display_name")
         self.is_required_check = section in repo_conf.required_checks
-        self.trigger_path = config.get(section, "trigger_path", fallback="")
+
+        # mandatory fields
+        self.display_name = config.get(section, "display_name")
         self.cpu = config.getfloat(section, "cpu")
-        self.gpu = config.getint(section, "gpu", fallback=0)
         self.nodepools = config.get(section, "nodepools").split()
-        self.dockerfile = config.get(section, "dockerfile")
-        self.build_path = config.get(section, "build_path")
+
+        # optional fields
+        self.trigger_path = config.get(section, "trigger_path", fallback="")
+        self.gpu = config.getint(section, "gpu", fallback=0)
+        self.dockerfile = config.get(section, "dockerfile", fallback="")
+        self.build_path = config.get(section, "build_path", fallback="")
         self.arch = config.get(section, "arch", fallback="x86")
         self.build_args = config.get(section, "build_args", fallback="")
         self.remote_host = config.get(section, "remote_host", fallback="")
