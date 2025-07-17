@@ -48,16 +48,16 @@ def main():
             time.sleep(5)
             continue
 
+        pipeline_url = trigger_json["url"]
         pipeline_status = trigger_json["pipeline_status"]
-        output += [f"Pipeline Status: {pipeline_status}", ""]
+        output += [f"Pipeline Status: {pipeline_status}", f"GitLab UI: {pipeline_url}"]
 
-        pipeline_html = get_url(trigger_json["url"].replace("&type=gitlab", ""))
+        pipeline_html = get_url(pipeline_url.replace("&type=gitlab", ""))
         soup = BeautifulSoup(pipeline_html, "html.parser")
         for link in soup.find_all("a"):
             href = link.get("href")
             if href.startswith("/ci/job/result/"):
-                bar = "=" * 25
-                output += ["", f" {bar} {link.get_text().upper().center(35)} {bar}", ""]
+                output += format_title(link.get_text())
                 job_result_html = get_url(f"https://cicd-ext-mw.cscs.ch{href}")
                 soup = BeautifulSoup(job_result_html, "html.parser")
                 for pre in soup.find_all("pre"):
@@ -76,6 +76,17 @@ def get_url(url: str):
     r = requests.get(url)
     r.raise_for_status()
     return r.text
+
+
+# ======================================================================================
+def format_title(title: str):
+    return [
+        "",
+        " ╔" + "═" * 98 + "╗",
+        f" ║ {title.upper().center(96)} ║",
+        " ╚" + "═" * 98 + "╝",
+        "",
+    ]
 
 
 # ======================================================================================
