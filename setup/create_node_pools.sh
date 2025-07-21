@@ -51,6 +51,7 @@ gcloud container node-pools create pool-nvidia-pascal  "${DEFAULT_ARGS[@]}" \
     --workload-metadata=GKE_METADATA \
     --node-locations="us-central1-a,us-central1-c" \
     --machine-type="custom-24-92160" \
+    --image-type="UBUNTU_CONTAINERD" \
     --accelerator="type=nvidia-tesla-p4,count=1" \
     --min-cpu-platform="Intel Skylake" \
     --total-max-nodes=4
@@ -61,6 +62,7 @@ gcloud container node-pools delete --cluster="${CLUSTER_NAME}" --quiet pool-nvid
 gcloud container node-pools create pool-nvidia-volta "${DEFAULT_ARGS[@]}" \
     --workload-metadata=GKE_METADATA \
     --machine-type="custom-12-46080" \
+    --image-type="UBUNTU_CONTAINERD" \
     --accelerator="type=nvidia-tesla-v100,count=1" \
     --min-cpu-platform="Intel Skylake"
 
