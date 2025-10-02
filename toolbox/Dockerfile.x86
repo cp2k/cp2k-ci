@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.8.0-base-ubuntu22.04
+FROM nvidia/cuda:12.9.1-base-ubuntu24.04
 
 # author: Ole Schuett
 
@@ -21,9 +21,15 @@ RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true && \
     software-properties-common \
     openssh-client \
     python3-pip \
+    python3-venv \
     python3-wheel \
     python3-setuptools \
   && rm -rf /var/lib/apt/lists/*
+
+# Create Python virtual environment to make pip3 happy.
+WORKDIR /opt/cp2kci
+RUN python3 -m venv .
+ENV PATH="/opt/cp2kci/bin:${PATH}"
 
 # install python packages
 COPY requirements.txt .
@@ -37,11 +43,8 @@ RUN wget -qO- https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /e
     rm -rf /var/lib/apt/lists/*
 
 # install nvidia-docker
-# https://github.com/NVIDIA/nvidia-docker
-RUN wget -qO- https://nvidia.github.io/nvidia-docker/gpgkey | gpg --dearmor -o /etc/apt/trusted.gpg.d/nvidia-docker.gpg && \
-    wget -qO- https://nvidia.github.io/nvidia-docker/ubuntu$(lsb_release -rs)/nvidia-docker.list | tee /etc/apt/sources.list.d/nvidia-docker.list && \
-    apt-get update -qq && \
-    apt-get install -qq nvidia-docker2 && \
+RUN apt-get update -qq && \
+    apt-get install -qq nvidia-container-toolkit && \
     rm -rf /var/lib/apt/lists/*
 
 # install gcloud
