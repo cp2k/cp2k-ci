@@ -42,10 +42,11 @@ RUN wget -qO- https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /e
     apt-get install -qq docker-ce && \
     rm -rf /var/lib/apt/lists/*
 
-# install nvidia-docker
+# install nvidia container toolkit
 RUN apt-get update -qq && \
     apt-get install -qq nvidia-container-toolkit && \
     rm -rf /var/lib/apt/lists/*
+RUN nvidia-ctk runtime configure --runtime=docker
 
 # install gcloud
 RUN wget -qO- https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/google-cloud.gpg && \
