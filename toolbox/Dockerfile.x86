@@ -58,6 +58,9 @@ RUN wget -qO- https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dear
 # clone repos
 RUN git clone --recursive --depth=1 --single-branch -b master https://github.com/cp2k/cp2k.git /workspace/cp2k
 
+# Fix path to nvidia-smi.
+ENV PATH="/usr/local/nvidia/bin:${PATH}"
+
 WORKDIR /opt/cp2kci-toolbox
 COPY *.sh *.py /opt/cp2kci-toolbox/
 
