@@ -162,9 +162,11 @@ class KubernetesUtil:
         elif target.runner == "cscs":
             env_vars["CSCS_PIPELINE"] = target.cscs_pipeline
         elif target.runner == "local":
+            build_args = f"{target.build_args} GIT_COMMIT_SHA={git_ref}"
+            if use_cache:
+                build_args += " SPACK_CACHE=gs://cp2k-spack-cache"
             env_vars["DOCKERFILE"] = target.dockerfile
             env_vars["BUILD_PATH"] = target.build_path
-            build_args = f"{target.build_args} GIT_COMMIT_SHA={git_ref} SPACK_CACHE=gs://cp2k-spack-cache"
             env_vars["BUILD_ARGS"] = build_args.strip()
             env_vars["USE_CACHE"] = "yes" if use_cache else "no"
             env_vars["CACHE_FROM"] = target.cache_from
