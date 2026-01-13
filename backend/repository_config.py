@@ -18,7 +18,7 @@ REPOSITORY_CONFIGS: List[RepositoryConfig] = [
     RepositoryConfig(
         name="cp2k",
         targets_config="/tools/docker/cp2k-ci.conf",
-        required_checks=["precommit", "misc", "sdbg"],
+        required_checks=["precommit", "misc", "pdbg"],
     )
 ]
 
