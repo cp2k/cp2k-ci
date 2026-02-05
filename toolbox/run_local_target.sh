@@ -143,8 +143,11 @@ if ! docker build \
   echo ""
   docker image push --quiet "${target_image}:${branch}"
   echo "done." >> "${REPORT}"
-  # Write error report and quit.
-  echo -e "\\nSummary: Docker build had non-zero exit status.\\nStatus: FAILED" | tee -a "${REPORT}"
+  # Give priority to the existing (presumably more helpful) failure message.
+  if ! grep --quiet -xF "Status: FAILED" "${REPORT}" ; then
+    echo -e "\\nSummary: Docker build had non-zero exit status.\\nStatus: FAILED" | tee -a "${REPORT}"
+  fi
+  # Upload report and quit.
   upload_final_report
   exit 0  # Prevent crash looping.
 fi
