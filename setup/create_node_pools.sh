@@ -25,7 +25,7 @@ set -x
 gcloud container node-pools delete --cluster="${CLUSTER_NAME}" --quiet pool-main
 gcloud container node-pools create pool-main  "${DEFAULT_ARGS[@]}" \
     --machine-type="t2d-standard-32" \
-    --total-max-nodes=8
+    --total-max-nodes=12
 
 gcloud container node-pools delete --cluster="${CLUSTER_NAME}" --quiet pool-intel
 gcloud container node-pools create pool-intel "${DEFAULT_ARGS[@]}" \
