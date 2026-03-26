@@ -328,19 +328,21 @@ def process_pull_request(
 
     commits = list(gh.iterate_commits(pr["commits_url"]))
 
-    # Find previous check run conclusions, before we call cancel on them.
+    # Find previous check runs, before we call cancel on them.
     prev_check_runs: List[CheckRun] = []
     for commit in reversed(commits):
         prev_check_runs = list(gh.iterate_check_runs(commit["url"] + "/check-runs"))
         if prev_check_runs:
             break
-    prev_conclusions: Dict[TargetName, str] = {}
+    prev_started_targets: set[TargetName] = set()
     for prev_check_run in prev_check_runs:
-        try:
-            _, target_name = parse_external_id(prev_check_run["external_id"])
-            prev_conclusions[target_name] = prev_check_run["conclusion"]
-        except:
-            print(f"Found unparsable external id: " + prev_check_run["external_id"])
+        conclusion = prev_check_run.get("conclusion")
+        if conclusion != "neutral":
+            try:
+                _, target_name = parse_external_id(prev_check_run["external_id"])
+                prev_started_targets.add(target_name)
+            except:
+                print(f"Found unparsable external id: " + prev_check_run["external_id"])
 
     # cancel old jobs
     cancel_check_runs(target_pattern="*", gh=gh, pr=pr, sender=sender)
@@ -352,8 +354,8 @@ def process_pull_request(
 
     # submit check runs
     for target in gh.get_targets(pr):
-        if target.name in prev_conclusions:
-            optional = prev_conclusions[target.name] in ("neutral", "cancelled")
+        if target.name in prev_started_targets:
+            optional = False
         else:
             optional = not (target.is_required_check or should_trigger(target, gh, pr))
         submit_check_run(target, gh, pr, sender, optional=optional)
