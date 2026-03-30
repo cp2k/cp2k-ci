@@ -491,7 +491,7 @@ def cancel_check_runs(
         print(f"Canceling job {job.metadata.name}.")
         summary = "[Partial Report]({})".format(job_annotations["cp2kci-report-url"])
         summary += f"\n\nCancelled by @{sender}."
-        conclusion = "stale" if is_system_cancel else "cancelled"
+        conclusion = "skipped" if is_system_cancel else "cancelled"
         check_run: CheckRun = {
             "url": job_annotations["cp2kci-check-run-url"],
             "status": "completed",
