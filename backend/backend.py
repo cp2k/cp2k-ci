@@ -343,7 +343,7 @@ def process_pull_request(
             print(f"Found unparsable external id: " + prev_check_run["external_id"])
 
     # cancel old jobs
-    cancel_check_runs(target_pattern="*", gh=gh, pr=pr, sender=sender)
+    cancel_check_runs(target_pattern="*", gh=gh, pr=pr, sender=sender, is_system_cancel=True)
 
     # check for merge commits
     if not check_git_history(gh, pr, commits):
@@ -473,6 +473,7 @@ def cancel_check_runs(
     gh: GithubUtil,
     pr: PullRequest,
     sender: str,
+    is_system_cancel: bool = False,
 ) -> None:
     run_job_list = kubeutil.list_jobs("cp2kci=run")
     for job in run_job_list.items:
@@ -490,10 +491,11 @@ def cancel_check_runs(
         print(f"Canceling job {job.metadata.name}.")
         summary = "[Partial Report]({})".format(job_annotations["cp2kci-report-url"])
         summary += f"\n\nCancelled by @{sender}."
+        conclusion = "skipped" if is_system_cancel else "cancelled"
         check_run: CheckRun = {
             "url": job_annotations["cp2kci-check-run-url"],
             "status": "completed",
-            "conclusion": "cancelled",
+            "conclusion": conclusion,
             "completed_at": gh.now(),
             "output": {"title": "Cancelled", "summary": summary},
             "actions": build_restart_actions(),
