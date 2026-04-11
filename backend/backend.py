@@ -240,6 +240,10 @@ def process_github_event(event: str, body: GithubEvent) -> None:
         ext_id = next(prev_check_runs)["external_id"]
         pr_number, _ = parse_external_id(ext_id)
         sender = body["sender"]["login"]
+        pr = gh.get_pull_request(pr_number)
+        if not is_authorized_for_check_run(sender, gh, pr):
+            print(f"Unauthorized check_suite rerequested from {sender} on PR {pr_number}")
+            return
         process_pull_request(gh, pr_number, sender)
 
     elif event == "check_run" and action == "rerequested":
@@ -249,6 +253,9 @@ def process_github_event(event: str, body: GithubEvent) -> None:
         pr = gh.get_pull_request(pr_number)
         target = gh.get_target_by_name(target_name, pr)
         sender = body["sender"]["login"]
+        if not is_authorized_for_check_run(sender, gh, pr):
+            print(f"Unauthorized rerequested from {sender} on PR {pr_number}")
+            return
         submit_check_run(target, gh, pr, sender)
 
     elif event == "check_run" and action == "requested_action":
@@ -259,6 +266,9 @@ def process_github_event(event: str, body: GithubEvent) -> None:
         gh = GithubUtil(body["repository"]["name"])
         pr = gh.get_pull_request(pr_number)
         target = gh.get_target_by_name(target_name, pr)
+        if not is_authorized_for_check_run(sender, gh, pr):
+            print(f"Unauthorized requested_action from {sender} on PR {pr_number}")
+            return
         if requested_action == "run":
             submit_check_run(target, gh, pr, sender)
         elif requested_action == "run_nocache":
@@ -267,8 +277,115 @@ def process_github_event(event: str, body: GithubEvent) -> None:
             cancel_check_runs(target.name, gh, pr, sender)
         else:
             print(f"Unknown requested action: {requested_action}")
+
+    elif event == "issue_comment" and action == "created":
+        process_comment_command(body)
     else:
         pass  # Unhandled github even - there are many of these.
+
+
+# ======================================================================================
+def process_comment_command(body: GithubEvent) -> None:
+    """Handle /cp2k-ci commands in PR comments.
+
+    Supported commands:
+      /cp2k-ci <target>              - trigger a test
+      /cp2k-ci cancel <target>       - cancel a running test
+      /cp2k-ci nocache <target>      - trigger a test without build cache
+
+    Authorization: repo maintainers (write/admin) or the PR author if they are
+    a cp2k org member. Non-maintainers may only trigger tests whose current
+    check run conclusion is 'neutral' or 'cancelled'.
+    """
+    comment_body = body.get("comment", {}).get("body", "")
+    # Only process comments on pull requests (not plain issues).
+    if "pull_request" not in body.get("issue", {}):
+        return
+
+    # Parse all /cp2k-ci commands from the comment.
+    commands = re.findall(r"^/cp2k-ci\s+(.+)$", comment_body, re.MULTILINE)
+    if not commands:
+        return
+
+    repo_name = body["repository"]["name"]
+    pr_number = PullRequestNumber(body["issue"]["number"])
+    sender = body["sender"]["login"]
+    comment_url = body["comment"]["url"]
+    gh = GithubUtil(repo_name)
+    pr = gh.get_pull_request(pr_number)
+
+    # Authorization check.
+    if not is_authorized_for_check_run(sender, gh, pr):
+        print(f"Unauthorized /cp2k-ci command from {sender} on PR {pr_number}")
+        gh.post_comment_reaction(comment_url, "-1")
+        return
+
+    # Determine if sender is a maintainer (unrestricted) or just the PR author.
+    sender_permission = gh.get_repo_permission(sender)
+    is_maintainer = sender_permission in ("admin", "write")
+
+    # Build a map of current check run conclusions for this PR's head SHA.
+    head_sha = pr["head"]["sha"]
+    current_conclusions: Dict[TargetName, str] = {}
+    for cr in gh.iterate_check_runs(f"/commits/{head_sha}/check-runs"):
+        try:
+            _, tname = parse_external_id(cr["external_id"])
+            current_conclusions[tname] = cr.get("conclusion", "")
+        except:
+            pass
+
+    for cmd_line in commands:
+        args = cmd_line.strip().split()
+        if not args:
+            continue
+
+        if args[0] == "cancel" and len(args) == 2:
+            section_name = args[1]
+            target_name = TargetName(f"{repo_name}-{section_name}")
+            try:
+                cancel_check_runs(target_name, gh, pr, sender)
+                gh.post_comment_reaction(comment_url, "+1")
+            except Exception as e:
+                print(f"Error cancelling {target_name}: {e}")
+                gh.post_comment_reaction(comment_url, "confused")
+
+        elif args[0] == "nocache" and len(args) == 2:
+            section_name = args[1]
+            target_name = TargetName(f"{repo_name}-{section_name}")
+            if not is_maintainer:
+                conclusion = current_conclusions.get(target_name)
+                if conclusion not in ("neutral", "cancelled"):
+                    print(f"Rejected /cp2k-ci nocache {section_name}: state is {conclusion}")
+                    gh.post_comment_reaction(comment_url, "-1")
+                    continue
+            try:
+                target = gh.get_target_by_name(target_name, pr)
+                submit_check_run(target, gh, pr, sender, use_cache=False)
+                gh.post_comment_reaction(comment_url, "+1")
+            except Exception as e:
+                print(f"Error submitting nocache {section_name}: {e}")
+                gh.post_comment_reaction(comment_url, "confused")
+
+        elif len(args) == 1:
+            section_name = args[0]
+            target_name = TargetName(f"{repo_name}-{section_name}")
+            if not is_maintainer:
+                conclusion = current_conclusions.get(target_name)
+                if conclusion not in ("neutral", "cancelled"):
+                    print(f"Rejected /cp2k-ci {section_name}: state is {conclusion}")
+                    gh.post_comment_reaction(comment_url, "-1")
+                    continue
+            try:
+                target = gh.get_target_by_name(target_name, pr)
+                submit_check_run(target, gh, pr, sender)
+                gh.post_comment_reaction(comment_url, "+1")
+            except Exception as e:
+                print(f"Error submitting {section_name}: {e}")
+                gh.post_comment_reaction(comment_url, "confused")
+
+        else:
+            print(f"Unknown /cp2k-ci command: {cmd_line}")
+            gh.post_comment_reaction(comment_url, "confused")
 
 
 # ======================================================================================
@@ -414,6 +531,22 @@ def parse_external_id(
     pr_number = PullRequestNumber(ext_id.split(";")[0])
     target_name = TargetName(ext_id.split(";")[1])
     return pr_number, target_name
+
+
+# ======================================================================================
+def is_authorized_for_check_run(sender: str, gh: GithubUtil, pr: PullRequest) -> bool:
+    """Check if the sender is authorized to trigger/cancel optional check runs.
+
+    Authorized users are:
+      - Repository maintainers (write or admin permission), OR
+      - The PR author, if they are a member of the cp2k organization.
+    """
+    permission = gh.get_repo_permission(sender)
+    if permission in ("admin", "write"):
+        return True
+    if sender == pr["user"]["login"] and gh.is_org_member(sender):
+        return True
+    return False
 
 
 # ======================================================================================
