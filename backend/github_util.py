@@ -118,6 +118,8 @@ class GithubEvent(TypedDict, total=False):
     check_suite: CheckSuite
     check_run: CheckRun
     requested_action: CheckRunAction
+    issue: Dict[str, Any]  # For issue_comment events
+    comment: Dict[str, Any]  # For issue_comment events
 
 
 # ======================================================================================
@@ -286,6 +288,43 @@ class GithubUtil:
     def iterate_pull_requests(self) -> Iterator[PullRequest]:
         for page in self._iterate_pages("/pulls"):
             yield from page
+
+    # --------------------------------------------------------------------------
+    def is_org_member(self, username: str) -> bool:
+        """Check if a user is a member of the cp2k GitHub organization."""
+        try:
+            url = f"https://api.github.com/orgs/cp2k/members/{username}"
+            r = self._authenticated_http_request("GET", url)
+            return r.status_code == 204
+        except:
+            return False
+
+    # --------------------------------------------------------------------------
+    def get_repo_permission(self, username: str) -> str:
+        """Get a user's permission level on the repository (admin/write/read/none)."""
+        try:
+            resp = self._get(f"/collaborators/{username}/permission")
+            return str(resp.get("permission", "none"))
+        except:
+            return "none"
+
+    # --------------------------------------------------------------------------
+    def post_comment_reaction(self, comment_url: str, reaction: str) -> None:
+        """Post a reaction (+1, -1, confused, etc.) on a comment."""
+        try:
+            url = comment_url + "/reactions"
+            headers = {
+                "Authorization": "token " + self.token,
+                "Accept": "application/vnd.github.squirrel-girl-preview+json",
+            }
+            self._http_request("POST", url, headers, {"content": reaction})
+        except:
+            pass  # Best effort.
+
+    # --------------------------------------------------------------------------
+    def post_issue_comment(self, pr_number: PullRequestNumber, body: str) -> None:
+        """Post a comment on a pull request / issue."""
+        self._post(f"/issues/{pr_number}/comments", {"body": body})
 
 
 # EOF
