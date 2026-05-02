@@ -318,8 +318,8 @@ class GithubUtil:
                 "Accept": "application/vnd.github.squirrel-girl-preview+json",
             }
             self._http_request("POST", url, headers, {"content": reaction})
-        except:
-            pass  # Best effort.
+        except Exception as e:
+            print(f"Failed to post comment reaction: {e}")  # Best effort.
 
     # --------------------------------------------------------------------------
     def post_issue_comment(self, pr_number: PullRequestNumber, body: str) -> None:

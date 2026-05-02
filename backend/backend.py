@@ -324,15 +324,8 @@ def process_comment_command(body: GithubEvent) -> None:
     sender_permission = gh.get_repo_permission(sender)
     is_maintainer = sender_permission in ("admin", "write")
 
-    # Build a map of current check run conclusions for this PR's head SHA.
-    head_sha = pr["head"]["sha"]
-    current_conclusions: Dict[TargetName, str] = {}
-    for cr in gh.iterate_check_runs(f"/commits/{head_sha}/check-runs"):
-        try:
-            _, tname = parse_external_id(cr["external_id"])
-            current_conclusions[tname] = cr.get("conclusion", "")
-        except:
-            pass
+    # Build a map of latest check run conclusions for this PR's head SHA.
+    current_conclusions = get_current_check_run_conclusions(gh, pr)
 
     for cmd_line in commands:
         args = cmd_line.strip().split()
@@ -340,47 +333,45 @@ def process_comment_command(body: GithubEvent) -> None:
             continue
 
         if args[0] == "cancel" and len(args) == 2:
-            section_name = args[1]
-            target_name = TargetName(f"{repo_name}-{section_name}")
+            target_arg = args[1]
             try:
-                cancel_check_runs(target_name, gh, pr, sender)
+                target = get_comment_target(repo_name, target_arg, gh, pr, is_maintainer)
+                cancel_check_runs(target.name, gh, pr, sender)
                 gh.post_comment_reaction(comment_url, "+1")
             except Exception as e:
-                print(f"Error cancelling {target_name}: {e}")
+                print(f"Error cancelling {target_arg}: {e}")
                 gh.post_comment_reaction(comment_url, "confused")
 
         elif args[0] == "nocache" and len(args) == 2:
-            section_name = args[1]
-            target_name = TargetName(f"{repo_name}-{section_name}")
-            if not is_maintainer:
-                conclusion = current_conclusions.get(target_name)
-                if conclusion not in ("neutral", "cancelled"):
-                    print(f"Rejected /cp2k-ci nocache {section_name}: state is {conclusion}")
-                    gh.post_comment_reaction(comment_url, "-1")
-                    continue
+            target_arg = args[1]
             try:
-                target = gh.get_target_by_name(target_name, pr)
+                target = get_comment_target(repo_name, target_arg, gh, pr, is_maintainer)
+                if not is_maintainer:
+                    conclusion = current_conclusions.get(target.name)
+                    if conclusion not in ("neutral", "cancelled"):
+                        print(f"Rejected /cp2k-ci nocache {target_arg}: state is {conclusion}")
+                        gh.post_comment_reaction(comment_url, "-1")
+                        continue
                 submit_check_run(target, gh, pr, sender, use_cache=False)
                 gh.post_comment_reaction(comment_url, "+1")
             except Exception as e:
-                print(f"Error submitting nocache {section_name}: {e}")
+                print(f"Error submitting nocache {target_arg}: {e}")
                 gh.post_comment_reaction(comment_url, "confused")
 
         elif len(args) == 1:
-            section_name = args[0]
-            target_name = TargetName(f"{repo_name}-{section_name}")
-            if not is_maintainer:
-                conclusion = current_conclusions.get(target_name)
-                if conclusion not in ("neutral", "cancelled"):
-                    print(f"Rejected /cp2k-ci {section_name}: state is {conclusion}")
-                    gh.post_comment_reaction(comment_url, "-1")
-                    continue
+            target_arg = args[0]
             try:
-                target = gh.get_target_by_name(target_name, pr)
+                target = get_comment_target(repo_name, target_arg, gh, pr, is_maintainer)
+                if not is_maintainer:
+                    conclusion = current_conclusions.get(target.name)
+                    if conclusion not in ("neutral", "cancelled"):
+                        print(f"Rejected /cp2k-ci {target_arg}: state is {conclusion}")
+                        gh.post_comment_reaction(comment_url, "-1")
+                        continue
                 submit_check_run(target, gh, pr, sender)
                 gh.post_comment_reaction(comment_url, "+1")
             except Exception as e:
-                print(f"Error submitting {section_name}: {e}")
+                print(f"Error submitting {target_arg}: {e}")
                 gh.post_comment_reaction(comment_url, "confused")
 
         else:
@@ -531,6 +522,50 @@ def parse_external_id(
     pr_number = PullRequestNumber(ext_id.split(";")[0])
     target_name = TargetName(ext_id.split(";")[1])
     return pr_number, target_name
+
+
+# ======================================================================================
+def normalize_comment_target_name(repo_name: str, target_arg: str) -> TargetName:
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", target_arg):
+        raise ValueError(f"Invalid target name: {target_arg}")
+    if target_arg.startswith(f"{repo_name}-"):
+        return TargetName(target_arg)
+    return TargetName(f"{repo_name}-{target_arg}")
+
+
+# ======================================================================================
+def get_comment_target(
+    repo_name: str,
+    target_arg: str,
+    gh: GithubUtil,
+    pr: PullRequest,
+    is_maintainer: bool,
+) -> Target:
+    target_name = normalize_comment_target_name(repo_name, target_arg)
+
+    # Maintainers keep the old behavior: use the CI config from the PR branch so
+    # CI-config changes can still be tested. For non-maintainers, resolve the
+    # target from the trusted base branch config; otherwise a PR could add or
+    # modify a target in tools/docker/cp2k-ci.conf and then trigger it manually.
+    return gh.get_target_by_name(target_name, pr if is_maintainer else None)
+
+
+# ======================================================================================
+def get_current_check_run_conclusions(
+    gh: GithubUtil, pr: PullRequest
+) -> Dict[TargetName, Optional[str]]:
+    head_sha = pr["head"]["sha"]
+    current_conclusions: Dict[TargetName, Optional[str]] = {}
+    for cr in gh.iterate_check_runs(
+        f"/commits/{head_sha}/check-runs?filter=latest&per_page=100"
+    ):
+        try:
+            pr_number, tname = parse_external_id(cr["external_id"])
+            if pr_number == pr["number"]:
+                current_conclusions[tname] = cr.get("conclusion")
+        except:
+            pass
+    return current_conclusions
 
 
 # ======================================================================================
