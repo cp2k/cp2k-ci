@@ -144,6 +144,7 @@ def tick(cycle: int) -> None:
     if cycle % 30 == 0:  # every 2.5 minutes
         poll_pull_requests(run_job_list)
     for job in run_job_list.items:
+        record_job_start_time(job)
         job_annotations = job.metadata.annotations
         if "cp2kci-dashboard" in job_annotations:
             publish_job_to_dashboard(job)
@@ -624,6 +625,17 @@ def poll_pull_requests(job_list: V1JobList) -> None:
             if pr_is_old and not check_runs:
                 print("Found forgotten PR: {}".format(pr["number"]))
                 process_pull_request(gh, pr["number"], pr["user"]["login"])
+
+
+# ======================================================================================
+def record_job_start_time(job: V1Job) -> None:
+    job_annotations = job.metadata.annotations
+    if "cp2kci-started" not in job_annotations:
+        report_blob = output_bucket.get_blob(job_annotations["cp2kci-report-path"])
+        if report_blob.size and report_blob.size > 100:
+            now = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+            job_annotations["cp2kci-started"] = now
+            kubeutil.patch_job_annotations(job.metadata.name, job_annotations)
 
 
 # ======================================================================================
