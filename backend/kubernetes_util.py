@@ -127,12 +127,9 @@ class KubernetesUtil:
         job_name = f"run-{target.name}-{short_uuid}"
         report_path = f"{job_name}_report.txt"
         artifacts_path = f"{job_name}_artifacts.zip"
-
-        # upload waiting message
+        now = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
         report_blob = self.output_bucket.blob(report_path)
         assert not report_blob.exists()
-        report_blob.cache_control = "no-cache"
-        report_blob.upload_from_string("Report not yet available.")
 
         # amend job annotations
         job_annotations["cp2kci-target"] = target.name
@@ -140,10 +137,12 @@ class KubernetesUtil:
         job_annotations["cp2kci-report-path"] = report_path
         job_annotations["cp2kci-report-url"] = report_blob.public_url
         job_annotations["cp2kci-artifacts-path"] = artifacts_path
+        job_annotations["cp2kci-submitted"] = now
 
-        # publish job annotations also to report blob
-        report_blob.metadata = job_annotations
-        report_blob.patch()
+        # upload waiting message
+        report_blob.cache_control = "no-cache"
+        report_blob.metadata = job_annotations  # publish job annotations
+        report_blob.upload_from_string("Report not yet available.")
 
         # environment variables
         env_vars: Dict[str, str] = {}
