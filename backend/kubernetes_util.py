@@ -36,6 +36,10 @@ class KubernetesUtil:
         self.batch_api = kubernetes.client.BatchV1Api()
 
     # --------------------------------------------------------------------------
+    def now(self) -> str:
+        return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+    # --------------------------------------------------------------------------
     def get_upload_url(
         self, path: str, content_type: str = "text/plain;charset=utf-8"
     ) -> str:
@@ -80,6 +84,7 @@ class KubernetesUtil:
     def patch_job_annotations(
         self, job_name: str, new_annotations: Dict[str, str]
     ) -> None:
+        new_annotations["cp2kci-updated"] = self.now()
         new_job_metadata = self.api.V1ObjectMeta(annotations=new_annotations)
         new_job = self.api.V1Job(metadata=new_job_metadata)
         self.batch_api.patch_namespaced_job(
@@ -91,6 +96,10 @@ class KubernetesUtil:
         if report_blob.exists():
             report_blob.metadata = new_annotations
             report_blob.patch()
+
+    # --------------------------------------------------------------------------
+    def now(self) -> str:
+        return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
     # --------------------------------------------------------------------------
     def resources(self, target: Target) -> V1ResourceRequirements:
@@ -127,7 +136,6 @@ class KubernetesUtil:
         job_name = f"run-{target.name}-{short_uuid}"
         report_path = f"{job_name}_report.txt"
         artifacts_path = f"{job_name}_artifacts.zip"
-        now = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
         report_blob = self.output_bucket.blob(report_path)
         assert not report_blob.exists()
 
@@ -137,7 +145,7 @@ class KubernetesUtil:
         job_annotations["cp2kci-report-path"] = report_path
         job_annotations["cp2kci-report-url"] = report_blob.public_url
         job_annotations["cp2kci-artifacts-path"] = artifacts_path
-        job_annotations["cp2kci-submitted"] = now
+        job_annotations["cp2kci-submitted"] = self.now()
 
         # upload waiting message
         report_blob.cache_control = "no-cache"

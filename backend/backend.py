@@ -633,8 +633,7 @@ def record_job_start_time(job: V1Job) -> None:
     if "cp2kci-started" not in job_annotations:
         report_blob = output_bucket.get_blob(job_annotations["cp2kci-report-path"])
         if report_blob.size and report_blob.size > 100:
-            now = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-            job_annotations["cp2kci-started"] = now
+            job_annotations["cp2kci-started"] = kubeutil.now()
             kubeutil.patch_job_annotations(job.metadata.name, job_annotations)
 
 
