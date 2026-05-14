@@ -3,7 +3,9 @@
 # author: Ole Schuett
 
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
+from dataclasses import dataclass
+from collections import defaultdict
 from typing import Dict
 
 import google.auth  # type: ignore
@@ -13,47 +15,41 @@ gcp_project = google.auth.default()[1]
 storage_client = google.cloud.storage.Client(project=gcp_project)
 output_bucket = storage_client.get_bucket("cp2k-ci")
 
-Stats = Dict[str, int]
-ok_per_target: Stats = dict()
-ok_per_month: Stats = dict()
-err_per_target: Stats = dict()
-err_per_month: Stats = dict()
+@dataclass
+class Stats:
+    count: int = 0
+    hours: float = 0.0
+
+stats_per_month_per_target: Dict[str, Dict[str, Stats]] = defaultdict(lambda: defaultdict(Stats))
 
 report_iterator = output_bucket.list_blobs(prefix="run-")
 for page in report_iterator.pages:
     print("Processing page {}".format(report_iterator.page_number))
     for report in page:
-        error = report.size < 100
+        meta = report.metadata
+        if not meta or "cp2kci-started" not in meta or "cp2kci-updated" not in meta:
+            continue  # without timestamps
         target = report.name.rsplit("-", 1)[0][4:]
         month = report.time_created.strftime("%Y-%m")
-        if report.size > 100:
-            ok_per_target[target] = ok_per_target.get(target, 0) + 1
-            ok_per_month[month] = ok_per_month.get(month, 0) + 1
-        else:
-            err_per_target[target] = err_per_target.get(target, 0) + 1
-            err_per_month[month] = err_per_month.get(month, 0) + 1
+        started = datetime.fromisoformat(meta["cp2kci-started"])
+        last_updated = datetime.fromisoformat(meta["cp2kci-updated"])
+        duration = last_updated - started
+        if duration.total_seconds() > 0:
+            stats = stats_per_month_per_target[month][target]
+            stats.count += 1
+            stats.hours += duration.total_seconds() / 3600
 
 usage_lines = []
-usage_lines.append("###########  CP2K-CI USAGE STATS  ###########")
-usage_lines.append("\n")
+for month in sorted(stats_per_month_per_target, reverse=True):
+    usage_lines.append(f"########## CP2K-CI stats for {month} ##########\n")
+    stats_per_target = stats_per_month_per_target[month]
+    usage_lines.append("Target                          Count     Hours")
+    usage_lines.append("-----------------------------------------------")
+    for target, s in sorted(stats_per_target.items(), key=lambda kv: kv[1].hours, reverse=True):
+        usage_lines.append(f"{target:30s} {s.count:6d} {s.hours:9.1f}")
+    usage_lines.append("\n\n\n")
 
-usage_lines.append("YEAR-MONTH              OK   ERR")
-usage_lines.append("--------------------------------")
-for month, count in sorted(ok_per_month.items(), key=lambda x: x[0]):
-    errors = err_per_month.get(month, 0)
-    bar = "x" * (count // 10) + "-" * (errors // 10)
-    usage_lines.append("{:20s} {:5d} {:5d} {}".format(month, count, errors, bar))
-usage_lines.append("\n")
-
-usage_lines.append("TARGET                  OK   ERR")
-usage_lines.append("--------------------------------")
-for target, count in sorted(ok_per_target.items(), key=lambda x: -x[1]):
-    errors = err_per_target.get(target, 0)
-    bar = "x" * (count // 10) + "-" * (errors // 10)
-    usage_lines.append("{:20s} {:5d} {:5d} {}".format(target, count, errors, bar))
-usage_lines.append("\n")
-
-now = datetime.utcnow().replace(microsecond=0)
+now = datetime.now(timezone.utc).replace(microsecond=0)
 usage_lines.append("Last updated: " + now.isoformat())
 usage_lines.append("")
 
