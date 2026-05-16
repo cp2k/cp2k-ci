@@ -430,6 +430,7 @@ def submit_check_run(
         "external_id": format_external_id(pr["number"], target.name),
         "head_sha": pr["head"]["sha"],
         "started_at": gh.now(),
+        "status": "completed" if optional else "queued"
     }
 
     if optional:
@@ -483,7 +484,7 @@ def cancel_check_runs(
             continue
         if int(job_annotations["cp2kci-pull-request-number"]) != pr["number"]:
             continue
-        if job_annotations["cp2kci-check-run-status"] != "in_progress":
+        if job_annotations["cp2kci-check-run-status"] == "completed":
             continue
         if target_pattern not in ("*", job_annotations["cp2kci-target"]):
             continue
@@ -685,11 +686,7 @@ def build_restart_actions() -> List[CheckRunAction]:
 
 # ======================================================================================
 def publish_job_to_github(job: V1Job) -> None:
-    status = "queued"
-    if job.status.active:
-        status = "in_progress"
-    elif job.status.completion_time:
-        status = "completed"
+    status = "in_progress" if job.status.active else "completed"
 
     # failed jobs are handled by poll_pull_requests()
 
