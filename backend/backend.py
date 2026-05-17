@@ -150,8 +150,8 @@ def tick(cycle: int) -> None:
             publish_job_to_dashboard(job)
         if "cp2kci-check-run-url" in job_annotations:
             publish_job_to_github(job)
-        if not job_is_active(job) and "cp2kci-force" not in job_annotations:
-            kubeutil.delete_job(job.metadata.name)
+        if job.status.completion_time and "cp2kci-force" not in job_annotations:
+            kubeutil.delete_job(job.metadata.name)  # keep failed jobs for investigation
 
 
 # ======================================================================================
