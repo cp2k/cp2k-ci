@@ -150,7 +150,7 @@ def tick(cycle: int) -> None:
             publish_job_to_dashboard(job)
         if "cp2kci-check-run-url" in job_annotations:
             publish_job_to_github(job)
-        if job.status.completion_time and "cp2kci-force" not in job_annotations:
+        if not job_is_active(job) and "cp2kci-force" not in job_annotations:
             kubeutil.delete_job(job.metadata.name)
 
 
@@ -517,7 +517,7 @@ def submit_dashboard_test(target: Target, head_sha: str, force: bool = False) ->
             if (
                 job.metadata.annotations["cp2kci-target"] == target.name
                 and "cp2kci-dashboard" in job.metadata.annotations
-                and (job.status.active or job.status.completion_time)
+                and job_is_active(job)
             ):
                 print(f"Found already underway dashboard job for: {target.name}.")
                 return  # Do not submit another job.
@@ -577,7 +577,7 @@ def poll_pull_requests(job_list: V1JobList) -> None:
     active_check_runs_urls = []
     for job in job_list.items:
         annotations = job.metadata.annotations
-        if job.status.active and "cp2kci-check-run-url" in annotations:
+        if job_is_active(job) and "cp2kci-check-run-url" in annotations:
             active_check_runs_urls.append(annotations["cp2kci-check-run-url"])
 
     for repo_config in REPOSITORY_CONFIGS:
@@ -641,7 +641,7 @@ def record_job_start_time(job: V1Job) -> None:
 # ======================================================================================
 def publish_job_to_dashboard(job: V1Job) -> None:
     job_annotations = job.metadata.annotations
-    if job.status.completion_time is None:
+    if job_is_active(job):
         return
 
     if "cp2kci-dashboard-published" in job_annotations:
@@ -686,7 +686,7 @@ def build_restart_actions() -> List[CheckRunAction]:
 
 # ======================================================================================
 def publish_job_to_github(job: V1Job) -> None:
-    status = "in_progress" if job.status.active else "completed"
+    status = "in_progress" if job_is_active(job) else "completed"
 
     # failed jobs are handled by poll_pull_requests()
 
@@ -740,6 +740,7 @@ def publish_job_to_github(job: V1Job) -> None:
     kubeutil.patch_job_annotations(job.metadata.name, job_annotations)
 
 
+
 # ======================================================================================
 def parse_report(report_blob: Any) -> Report:
     report = Report(status="UNKNOWN", summary="", git_sha=None)
@@ -754,6 +755,13 @@ def parse_report(report_blob: Any) -> Report:
         print(traceback.format_exc())
 
     return report
+
+
+# ======================================================================================
+def job_is_active(job: V1Job) -> bool:
+    # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#jobstatus-v1-batch
+    conditions = [c.type for c in job.status.conditions or []]
+    return "Complete" not in conditions and "Failed" not in conditions
 
 
 # ======================================================================================
