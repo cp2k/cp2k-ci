@@ -267,6 +267,8 @@ def process_github_event(event: str, body: GithubEvent) -> None:
             cancel_check_runs(target.name, gh, pr, sender)
         else:
             print(f"Unknown requested action: {requested_action}")
+    elif event == "issue_comment":
+        print("issue_comment event: "+ str(body))
     else:
         pass  # Unhandled github even - there are many of these.
 
