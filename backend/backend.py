@@ -591,6 +591,8 @@ def poll_pull_requests(job_list: V1JobList) -> None:
 
             check_runs = list(gh.iterate_check_runs(f"/commits/{head_sha}/check-runs"))
             for check_run in check_runs:
+                if check_run["app"]["owner"]["login"] != "cp2k":
+                    continue  # Ignore other apps like e.g. "packit".
                 if check_run["status"] == "completed":
                     continue  # Good, check_run is completed.
                 if check_run["url"] in active_check_runs_urls:
