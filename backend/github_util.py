@@ -18,6 +18,8 @@ GITHUB_APP_INSTALL_ID = os.environ["GITHUB_APP_INSTALL_ID"]
 
 HttpMethods = Literal["GET", "POST", "PATCH"]
 
+GITHUB_API_VERSION = "2026-03-10"
+
 
 # ======================================================================================
 class PullRequestNumber(int):
@@ -95,7 +97,6 @@ class PullRequest(TypedDict, total=False):
     commits_url: str
     html_url: str
     mergeable: bool
-    merge_commit_sha: CommitSha
     user: User
 
 
@@ -172,9 +173,12 @@ class GithubUtil:
         self.token = self.get_installation_token()
 
     # --------------------------------------------------------------------------
-    def get_master_head_sha(self) -> str:
-        # Get sha of latest git commit.
-        return str(next(self.iterate_commits("/commits"))["sha"])
+    def get_head_commit(self, branch: str) -> Commit:
+        return next(self.iterate_commits(f"/commits?sha={branch}"))
+
+    # --------------------------------------------------------------------------
+    def get_head_sha(self, branch: str) -> CommitSha:
+        return self.get_head_commit(branch)["sha"]
 
     # --------------------------------------------------------------------------
     def get_targets(self, pr: Optional[PullRequest] = None) -> List[Target]:
@@ -204,7 +208,7 @@ class GithubUtil:
         headers = {
             "Authorization": "Bearer " + app_token,
             "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2026-03-10",
+            "X-GitHub-Api-Version": GITHUB_API_VERSION,
         }
         # Obtain installation access token.
         url = "https://api.github.com/app/installations/{}/access_tokens"
@@ -247,7 +251,7 @@ class GithubUtil:
         headers = {
             "Authorization": "token " + self.token,
             "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2026-03-10",
+            "X-GitHub-Api-Version": GITHUB_API_VERSION,
         }
         # we get occasional 401 errors https://github.com/cp2k/cp2k-ci/issues/45
         for i in range(retries):

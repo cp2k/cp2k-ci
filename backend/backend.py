@@ -16,6 +16,7 @@ from repository_config import REPOSITORY_CONFIGS, get_repository_config_by_name
 from kubernetes_util import KubernetesUtil
 from github_util import (
     GithubUtil,
+    CommitSha,
     Commit,
     Comment,
     PullRequest,
@@ -182,13 +183,13 @@ def process_rpc(request: RpcRequest) -> None:
 
     elif request["rpc"] == "submit_all_dashboard_tests":
         gh = GithubUtil("cp2k")
-        head_sha = gh.get_master_head_sha()
+        head_sha = gh.get_head_sha("master")
         for target in gh.get_targets():
             submit_dashboard_test(target, head_sha)
 
     elif request["rpc"] == "submit_tagged_dashboard_tests":
         gh = GithubUtil("cp2k")
-        head_sha = gh.get_master_head_sha()
+        head_sha = gh.get_head_sha("master")
         for target in gh.get_targets():
             if request["tag"] in target.tags:
                 submit_dashboard_test(target, head_sha)
@@ -196,12 +197,12 @@ def process_rpc(request: RpcRequest) -> None:
     elif request["rpc"] == "submit_dashboard_test":
         gh = GithubUtil("cp2k")
         target = gh.get_target_by_name(request["target"])
-        submit_dashboard_test(target, gh.get_master_head_sha())
+        submit_dashboard_test(target, gh.get_head_sha("master"))
 
     elif request["rpc"] == "submit_dashboard_test_force":
         gh = GithubUtil("cp2k")
         target = gh.get_target_by_name(request["target"])
-        submit_dashboard_test(target, gh.get_master_head_sha(), force=True)
+        submit_dashboard_test(target, gh.get_head_sha("master"), force=True)
 
     elif request["rpc"] == "submit_check_run":
         gh = GithubUtil(request["repo"])
@@ -310,20 +311,21 @@ def await_mergeability(
     pr: PullRequest,
     check_run_name: str,
     check_run_external_id: CheckRunExternalId,
-) -> PullRequest:
+) -> Optional[CommitSha]:
     # https://developer.github.com/v3/git/#checking-mergeability-of-pull-requests
 
     check_run: CheckRun
 
     for i in range(10):
-        if pr["mergeable"] is not None and not pr["mergeable"]:
-            return pr  # not mergeable
-        elif pr["mergeable"] is not None and pr["mergeable"]:
+        if pr.get("mergeable") == False:
+            return None  # not mergeable
+        elif pr.get("mergeable") == True:
             # Check freshness of merge branch.
-            merge_commit = gh.get_commit(pr["merge_commit_sha"])
+            merge_commit = gh.get_head_commit(f"pull/{pr['number']}/merge")
             if any(p["sha"] == pr["head"]["sha"] for p in merge_commit["parents"]):
-                return pr  # mergeable
+                return merge_commit["sha"]  # mergeable
 
+        # pr["mergeable"] is None or merge_commit is outdated.
         # This might take a while, tell the user and disable resubmit buttons.
         if i == 0:
             check_run = {
@@ -413,9 +415,9 @@ def check_git_history(gh: GithubUtil, pr: PullRequest, commits: List[Commit]) ->
         "completed_at": gh.now(),
     }
 
-    pr = await_mergeability(gh, pr, check_run["name"], check_run["external_id"])
+    merge_sha = await_mergeability(gh, pr, check_run["name"], check_run["external_id"])
 
-    if not pr["mergeable"]:
+    if not merge_sha:
         check_run["conclusion"] = "failure"
         check_run["output"] = {"title": "Branch not mergeable.", "summary": ""}
     elif any([len(c["parents"]) != 1 for c in commits]):
@@ -483,8 +485,11 @@ def submit_check_run(
         gh.post_check_run(check_run)
         return
 
+    # Wait for mergeability check.
+    merge_sha = await_mergeability(gh, pr, check_run["name"], check_run["external_id"])
+    assert merge_sha
+
     # Let's submit the job.
-    pr = await_mergeability(gh, pr, check_run["name"], check_run["external_id"])
     check_run = gh.post_check_run(check_run)
     job_annotations = {
         "cp2kci-sender": sender,
@@ -494,12 +499,11 @@ def submit_check_run(
         "cp2kci-check-run-html-url": check_run["html_url"],
         "cp2kci-check-run-status": "queued",
     }
-    git_branch = "pull/{}/merge".format(pr["number"])
     kubeutil.submit_run(
         target,
-        git_branch,
-        pr["merge_commit_sha"],
-        job_annotations,
+        git_branch=f"pull/{pr['number']}/merge",
+        git_ref=merge_sha,
+        job_annotations=job_annotations,
         use_cache=use_cache,
         # priority="high-priority",
     )
