@@ -9,7 +9,7 @@ import traceback
 from time import sleep
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple, List, Literal, Union, TypedDict
+from typing import Any, Dict, Optional, Tuple, List, Literal, Union, TypedDict, cast
 
 from target import Target, TargetName
 from repository_config import REPOSITORY_CONFIGS, get_repository_config_by_name
@@ -28,12 +28,12 @@ from github_util import (
 from kubernetes.client.models.v1_job_list import V1JobList
 from kubernetes.client.models.v1_job import V1Job
 
-import google.auth  # type: ignore
+import google.auth
 import google.cloud.pubsub  # type: ignore
 import google.cloud.storage  # type: ignore
 
 
-gcp_project = google.auth.default()[1]
+gcp_project: str = google.auth.default()[1] or ""
 storage_client = google.cloud.storage.Client(project=gcp_project)
 subscriber_client = google.cloud.pubsub.SubscriberClient()
 output_bucket = storage_client.get_bucket("cp2k-ci")
@@ -225,7 +225,7 @@ def process_rpc(request: RpcRequest) -> None:
 # ======================================================================================
 def process_github_event(event: str, body: GithubEvent) -> None:
     action = body.get("action", "")
-    print(f"Got github even: {event} action: {action}")
+    print(f"Got github event: {event} action: {action}")
 
     if event == "pull_request" and action in ("opened", "reopened", "synchronize"):
         gh = GithubUtil(body["repository"]["name"])
@@ -267,8 +267,10 @@ def process_github_event(event: str, body: GithubEvent) -> None:
             cancel_check_runs(target.name, gh, pr, sender)
         else:
             print(f"Unknown requested action: {requested_action}")
+
     elif event == "issue_comment":
-        print("issue_comment event: "+ str(body))
+        print("issue_comment event: " + str(body))
+
     else:
         pass  # Unhandled github even - there are many of these.
 
@@ -346,7 +348,9 @@ def process_pull_request(
             print(f"Found unparsable external id: " + prev_check_run["external_id"])
 
     # cancel old jobs
-    cancel_check_runs(target_pattern="*", gh=gh, pr=pr, sender=sender, is_system_cancel=True)
+    cancel_check_runs(
+        target_pattern="*", gh=gh, pr=pr, sender=sender, is_system_cancel=True
+    )
 
     # check for merge commits
     if not check_git_history(gh, pr, commits):
@@ -432,7 +436,7 @@ def submit_check_run(
         "external_id": format_external_id(pr["number"], target.name),
         "head_sha": pr["head"]["sha"],
         "started_at": gh.now(),
-        "status": "completed" if optional else "queued"
+        "status": "completed" if optional else "queued",
     }
 
     if optional:
@@ -546,12 +550,12 @@ def submit_dashboard_test(target: Target, head_sha: str, force: bool = False) ->
 
 
 # ======================================================================================
-def get_dashboard_report_age(target_name: TargetName) -> datetime:
+def get_dashboard_report_age(target_name: TargetName) -> timedelta:
     assert target_name.startswith("cp2k-")
     test_name = target_name[5:]
     blob = output_bucket.get_blob("dashboard_" + test_name + "_report.txt")
     if blob:
-        return datetime.now(timezone.utc) - blob.updated
+        return datetime.now(timezone.utc) - cast(datetime, blob.updated)
     return timedelta.max  # Blob not found.
 
 
@@ -742,7 +746,6 @@ def publish_job_to_github(job: V1Job) -> None:
     # update job_annotations
     job_annotations["cp2kci-check-run-status"] = status
     kubeutil.patch_job_annotations(job.metadata.name, job_annotations)
-
 
 
 # ======================================================================================

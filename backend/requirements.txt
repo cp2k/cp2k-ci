@@ -1,8 +1,11 @@
-pyjwt
-cryptography
-requests
-kubernetes
-google-cloud-pubsub
-google-cloud-storage
+PyJWT==2.13.0
+cryptography==48.0.0
+requests==2.34.2
+types-requests==2.33.0.20260518
+kubernetes==36.0.1
+kubernetes-typed==18.20.2
+google-cloud-pubsub==2.38.0
+google-cloud-storage==3.10.1
+mypy==2.1.0
 
 #EOF

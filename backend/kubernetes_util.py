@@ -36,22 +36,18 @@ class KubernetesUtil:
         self.batch_api = kubernetes.client.BatchV1Api()
 
     # --------------------------------------------------------------------------
-    def now(self) -> str:
-        return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-
-    # --------------------------------------------------------------------------
     def get_upload_url(
         self, path: str, content_type: str = "text/plain;charset=utf-8"
     ) -> str:
         # Get credentials.
         credentials, _ = google.auth.default()
         auth_request = google.auth.transport.requests.Request()
-        credentials.refresh(auth_request)
+        credentials.refresh(auth_request)  # type: ignore
         signing_credentials = google.auth.compute_engine.IDTokenCredentials(
             request=auth_request,
             target_audience="",
             service_account_email="cp2kci-backend@cp2k-org-project.iam.gserviceaccount.com",
-        )
+        )  # type: ignore
         # Sign the URL.
         blob = self.output_bucket.blob(path)
         upload_url = blob.generate_signed_url(

@@ -49,6 +49,7 @@ class CheckRunExternalId(str):
 
 # ======================================================================================
 class CheckRun(TypedDict, total=False):
+    app: GithubApp
     name: str
     external_id: CheckRunExternalId
     head_sha: CommitSha
@@ -60,6 +61,11 @@ class CheckRun(TypedDict, total=False):
     html_url: str
     output: CheckRunOutput
     actions: List[CheckRunAction]
+
+
+# ======================================================================================
+class GithubApp(TypedDict, total=False):
+    owner: User
 
 
 # ======================================================================================
