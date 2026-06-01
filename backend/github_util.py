@@ -84,7 +84,14 @@ class Branch(TypedDict, total=False):
 
 # ======================================================================================
 class User(TypedDict, total=False):
+    id: int
     login: str
+
+
+# ======================================================================================
+class Team(TypedDict, total=False):
+    id: int
+    name: str
 
 
 # ======================================================================================
@@ -98,6 +105,7 @@ class PullRequest(TypedDict, total=False):
     html_url: str
     mergeable: bool
     user: User
+    merged: bool
 
 
 # ======================================================================================
@@ -122,16 +130,6 @@ class Reactions(TypedDict, total=False):
 
 # ======================================================================================
 class Comment(TypedDict, total=False):
-    author_association: Literal[
-        "COLLABORATOR",
-        "CONTRIBUTOR",
-        "FIRST_TIMER",
-        "FIRST_TIME_CONTRIBUTOR",
-        "MANNEQUIN",
-        "MEMBER",
-        "NONE",
-        "OWNER",
-    ]
     body: str
     reactions: Reactions
     user: User
@@ -147,9 +145,9 @@ class Issue(TypedDict, total=False):
 # TODO split into seperate events.
 class GithubEvent(TypedDict, total=False):
     name: str
-    number: PullRequestNumber
-    repository: Repository
     sender: User
+    repository: Repository
+    pull_request: PullRequest
     check_suite: CheckSuite
     check_run: CheckRun
     requested_action: CheckRunAction
@@ -330,6 +328,30 @@ class GithubUtil:
     # --------------------------------------------------------------------------
     def post_reaction(self, reaction_url: str, reaction: str) -> None:
         self._post(reaction_url, {"content": reaction})
+
+    # --------------------------------------------------------------------------
+    def get_team(self, slug: str) -> Team:
+        return cast(Team, self._get(f"https://api.github.com/orgs/cp2k/teams/{slug}"))
+
+    # --------------------------------------------------------------------------
+    def post_invitation(self, user: User, team: Team) -> None:
+        invitation = {
+            "org": "cp2k",
+            "role": "direct_member",
+            "invitee_id": user["id"],
+            "team_ids": [team["id"]],
+        }
+        self._post(f"https://api.github.com/orgs/cp2k/invitations", invitation)
+
+    # --------------------------------------------------------------------------
+    def is_org_member(self, user: User) -> bool:
+        # Can't use pr["author_association"], it says "CONTRIBUTOR" for private members.
+        try:
+            url = f"https://api.github.com/orgs/cp2k/members/{user['login']}"
+            r = self._authenticated_http_request("GET", url, retries=5)
+            return r.status_code == 204
+        except:
+            return False
 
 
 # EOF

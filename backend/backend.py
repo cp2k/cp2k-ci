@@ -231,9 +231,13 @@ def process_github_event(event: str, body: GithubEvent) -> None:
 
     if event == "pull_request" and action in ("opened", "reopened", "synchronize"):
         gh = GithubUtil(body["repository"]["name"])
-        pr_number = body["number"]
+        pr_number = body["pull_request"]["number"]
         sender = body["sender"]["login"]
         process_pull_request(gh, pr_number, sender)
+
+    elif event == "pull_request" and action == "closed":
+        gh = GithubUtil(body["repository"]["name"])
+        process_pull_request_closed(gh, body["pull_request"])
 
     elif event == "check_suite" and action == "rerequested":
         # snatch pr_number from existing check_runs
@@ -281,12 +285,19 @@ def process_github_event(event: str, body: GithubEvent) -> None:
 
 
 # ======================================================================================
+def process_pull_request_closed(gh: GithubUtil, pr: PullRequest) -> None:
+    if pr["merged"] and not gh.is_org_member(pr["user"]):
+        print(f"Inviting user {pr['user']['login']} from #{pr['number']} to our org.")
+        dev_team = gh.get_team("cp2k-developers")
+        gh.post_invitation(pr["user"], dev_team)
+
+
+# ======================================================================================
 def process_issue_comment(
     gh: GithubUtil, pr_number: PullRequestNumber, comment: Comment
 ) -> None:
-    if comment["author_association"] not in ("MEMBER", "OWNER"):
-        association, html_url = comment["author_association"], comment["html_url"]
-        print(f"Ignoring comment because author is {association}: {html_url}")
+    if not gh.is_org_member(comment["user"]):
+        print(f"Ignoring comment because author is not a member: {comment['html_url']}")
         gh.post_reaction(comment["reactions"]["url"], "confused")
         return
 
