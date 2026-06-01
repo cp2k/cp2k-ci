@@ -489,7 +489,12 @@ def submit_check_run(
     merge_sha = await_mergeability(gh, pr, check_run["name"], check_run["external_id"])
     assert merge_sha
 
-    # Let's submit the job.
+    # Delete old jobs - in case there are any.
+    for job in list_check_run_jobs(target.name, pr):
+        print(f"Deleting old job {job.metadata.name}.")
+        kubeutil.delete_job(job.metadata.name)
+
+    # Let's submit the new job.
     check_run = gh.post_check_run(check_run)
     job_annotations = {
         "cp2kci-sender": sender,
@@ -510,15 +515,12 @@ def submit_check_run(
 
 
 # ======================================================================================
-def cancel_check_runs(
-    target_pattern: TargetName | Literal["*"],
-    gh: GithubUtil,
-    pr: PullRequest,
-    sender: str,
-    set_skipped: bool = False,
-) -> None:
-    run_job_list = kubeutil.list_jobs("cp2kci=run")
-    for job in run_job_list.items:
+def list_check_run_jobs(
+    target_pattern: TargetName | Literal["*"], pr: PullRequest
+) -> List[V1Job]:
+
+    results = []
+    for job in kubeutil.list_jobs("cp2kci=run").items:
         job_annotations = job.metadata.annotations
         if "cp2kci-pull-request-number" not in job_annotations:
             continue
@@ -528,9 +530,21 @@ def cancel_check_runs(
             continue
         if target_pattern not in ("*", job_annotations["cp2kci-target"]):
             continue
+        results.append(job)
+    return results
 
-        # Ok found a matching job to cancel.
+
+# ======================================================================================
+def cancel_check_runs(
+    target_pattern: TargetName | Literal["*"],
+    gh: GithubUtil,
+    pr: PullRequest,
+    sender: str,
+    set_skipped: bool = False,
+) -> None:
+    for job in list_check_run_jobs(target_pattern, pr):
         print(f"Canceling job {job.metadata.name}.")
+        job_annotations = job.metadata.annotations
         summary = "[Partial Report]({})".format(job_annotations["cp2kci-report-url"])
         summary += f"\n\nCancelled by @{sender}."
         conclusion = "skipped" if set_skipped else "cancelled"
