@@ -2,7 +2,7 @@
 
 
 from uuid import uuid4
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, cast
 
 from target import Target, TargetName
@@ -51,7 +51,7 @@ class KubernetesUtil:
         # Sign the URL.
         blob = self.output_bucket.blob(path)
         upload_url = blob.generate_signed_url(
-            expiration=datetime.utcnow() + timedelta(hours=12),
+            expiration=datetime.now(timezone.utc) + timedelta(hours=12),
             method="PUT",
             content_type=content_type,
             credentials=signing_credentials,
@@ -95,7 +95,7 @@ class KubernetesUtil:
 
     # --------------------------------------------------------------------------
     def now(self) -> str:
-        return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
     # --------------------------------------------------------------------------
     def resources(self, target: Target) -> V1ResourceRequirements:

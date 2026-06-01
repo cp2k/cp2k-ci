@@ -174,7 +174,7 @@ def process_rpc(request: RpcRequest) -> None:
     elif request["rpc"] == "update_healthz_beacon":
         blob = output_bucket.blob("healthz_beacon.txt")
         blob.cache_control = "no-cache"
-        blob.upload_from_string(datetime.utcnow().isoformat())
+        blob.upload_from_string(datetime.now(timezone.utc).isoformat())
         print("Updated healthz_beacon.txt")
 
     elif request["rpc"] == "github_event":

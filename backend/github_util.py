@@ -5,7 +5,7 @@ import jwt
 import requests
 from time import time, sleep
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterator, List, Literal, Optional, TypedDict, cast
 from base64 import b64decode
 
@@ -212,13 +212,11 @@ class GithubUtil:
 
     # --------------------------------------------------------------------------
     def now(self) -> str:
-        return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
     # --------------------------------------------------------------------------
     def age(self, created_at: str) -> timedelta:
-        # TODO: Python 3.11 has datetime.fromisoformat() with support for timezones.
-        creation = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ")
-        return datetime.utcnow() - creation
+        return datetime.now(timezone.utc) - datetime.fromisoformat(created_at)
 
     # --------------------------------------------------------------------------
     def _http_request(
