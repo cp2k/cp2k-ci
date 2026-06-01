@@ -203,7 +203,8 @@ class GithubUtil:
         # Setup header for app.
         headers = {
             "Authorization": "Bearer " + app_token,
-            "Accept": "application/vnd.github.machine-man-preview+json",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2026-03-10",
         }
         # Obtain installation access token.
         url = "https://api.github.com/app/installations/{}/access_tokens"
@@ -245,7 +246,8 @@ class GithubUtil:
     ) -> requests.Response:
         headers = {
             "Authorization": "token " + self.token,
-            "Accept": "application/vnd.github.antiope-preview+json",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2026-03-10",
         }
         # we get occasional 401 errors https://github.com/cp2k/cp2k-ci/issues/45
         for i in range(retries):
