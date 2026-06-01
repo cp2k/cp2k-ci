@@ -471,7 +471,7 @@ def submit_check_run(
     if optional:
         check_run["output"] = {
             "title": "Trigger manually on demand.",
-            "summary": f"Post `/cp2kci {target.short_name}` in a comment to trigger.",
+            "summary": f"[Members](https://github.com/orgs/cp2k/people) can trigger this test run by commenting: `/cp2kci {target.short_name}`.",
         }
         check_run["completed_at"] = gh.now()
         check_run["conclusion"] = "neutral"
