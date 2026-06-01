@@ -15,7 +15,7 @@ import fsspec  # type: ignore
 from zipfile import ZipFile
 from typing import Any
 
-import google.auth  # type: ignore
+import google.auth
 import google.cloud.pubsub  # type: ignore
 
 # For debugging fsspec:
@@ -28,7 +28,7 @@ app = Flask(__name__)
 app.config["GITHUB_WEBHOOK_SECRET"] = os.environ["GITHUB_WEBHOOK_SECRET"]
 app.logger.setLevel(logging.INFO)
 
-project = google.auth.default()[1]
+project: str = google.auth.default()[1] or ""
 pubsub_topic = "projects/" + project + "/topics/cp2kci-topic"
 
 app.logger.info("CP2K-CI frontend is up and running :-)")
