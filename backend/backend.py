@@ -17,6 +17,7 @@ from kubernetes_util import KubernetesUtil
 from github_util import (
     GithubUtil,
     Commit,
+    Comment,
     PullRequest,
     CheckRun,
     CheckRunAction,
@@ -269,10 +270,38 @@ def process_github_event(event: str, body: GithubEvent) -> None:
             print(f"Unknown requested action: {requested_action}")
 
     elif event == "issue_comment":
-        print("issue_comment event: " + str(body))
+        if "pull_request" in body["issue"] and "/cp2kci" in body["comment"]["body"]:
+            gh = GithubUtil(body["repository"]["name"])
+            pr_number = PullRequestNumber(body["issue"]["number"])
+            process_issue_comment(gh, pr_number, body["comment"])
 
     else:
         pass  # Unhandled github even - there are many of these.
+
+
+# ======================================================================================
+def process_issue_comment(
+    gh: GithubUtil, pr_number: PullRequestNumber, comment: Comment
+) -> None:
+    if comment["author_association"] not in ("MEMBER", "OWNER"):
+        association, html_url = comment["author_association"], comment["html_url"]
+        print(f"Ignoring comment because author is {association}: {html_url}")
+        gh.post_reaction(comment["reactions"]["url"], "confused")
+        return
+
+    maybe_target_names = set()
+    for line in comment["body"].split("\n"):
+        if line.strip().startswith("/cp2kci "):
+            maybe_target_names.update(line.split()[1:])
+
+    if maybe_target_names:
+        sender = comment["user"]["login"]
+        pr = gh.get_pull_request(pr_number)
+        targets = gh.get_targets(pr)
+        for target in gh.get_targets(pr):
+            if target.short_name in maybe_target_names:
+                submit_check_run(target, gh, pr, sender)
+        gh.post_reaction(comment["reactions"]["url"], "eyes")
 
 
 # ======================================================================================
@@ -438,7 +467,10 @@ def submit_check_run(
     }
 
     if optional:
-        check_run["output"] = {"title": "Trigger manually on demand.", "summary": ""}
+        check_run["output"] = {
+            "title": "Trigger manually on demand.",
+            "summary": f"Post `/cp2kci {target.short_name}` in a comment to trigger.",
+        }
         check_run["completed_at"] = gh.now()
         check_run["conclusion"] = "neutral"
         check_run["actions"] = [

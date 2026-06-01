@@ -115,6 +115,34 @@ class CheckSuite(TypedDict, total=False):
 
 
 # ======================================================================================
+class Reactions(TypedDict, total=False):
+    url: str
+
+
+# ======================================================================================
+class Comment(TypedDict, total=False):
+    author_association: Literal[
+        "COLLABORATOR",
+        "CONTRIBUTOR",
+        "FIRST_TIMER",
+        "FIRST_TIME_CONTRIBUTOR",
+        "MANNEQUIN",
+        "MEMBER",
+        "NONE",
+        "OWNER",
+    ]
+    body: str
+    reactions: Reactions
+    user: User
+    html_url: str
+
+
+# ======================================================================================
+class Issue(TypedDict, total=False):
+    number: int
+
+
+# ======================================================================================
 # TODO split into seperate events.
 class GithubEvent(TypedDict, total=False):
     name: str
@@ -124,6 +152,8 @@ class GithubEvent(TypedDict, total=False):
     check_suite: CheckSuite
     check_run: CheckRun
     requested_action: CheckRunAction
+    comment: Comment
+    issue: Issue
 
 
 # ======================================================================================
@@ -292,6 +322,10 @@ class GithubUtil:
     def iterate_pull_requests(self) -> Iterator[PullRequest]:
         for page in self._iterate_pages("/pulls"):
             yield from page
+
+    # --------------------------------------------------------------------------
+    def post_reaction(self, reaction_url: str, reaction: str) -> None:
+        self._post(reaction_url, {"content": reaction})
 
 
 # EOF

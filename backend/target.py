@@ -20,6 +20,7 @@ class Target:
         config: configparser.ConfigParser,
         section: str,
     ):
+        self.short_name = section
         self.repository = repo_conf.name
         self.name = TargetName(f"{repo_conf.name}-{section}")
         self.is_required_check = section in repo_conf.required_checks
