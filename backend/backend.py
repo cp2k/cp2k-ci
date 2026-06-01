@@ -298,7 +298,7 @@ def process_issue_comment(
 ) -> None:
     if not gh.is_org_member(comment["user"]):
         print(f"Ignoring comment because author is not a member: {comment['html_url']}")
-        gh.post_reaction(comment["reactions"]["url"], "confused")
+        gh.post_reaction(comment["reactions"]["url"], "-1")
         return
 
     maybe_target_names = set()
@@ -307,13 +307,17 @@ def process_issue_comment(
             maybe_target_names.update(line.split()[1:])
 
     if maybe_target_names:
+        reaction = "eyes"
         sender = comment["user"]["login"]
         pr = gh.get_pull_request(pr_number)
-        targets = gh.get_targets(pr)
-        for target in gh.get_targets(pr):
-            if target.short_name in maybe_target_names:
-                submit_check_run(target, gh, pr, sender)
-        gh.post_reaction(comment["reactions"]["url"], "eyes")
+        targets = {t.short_name: t for t in gh.get_targets(pr)}
+        for name in maybe_target_names:
+            if name in targets:
+                submit_check_run(targets[name], gh, pr, sender)
+            else:
+                reaction = "confused"
+        gh.clear_reactions(comment["reactions"]["url"])
+        gh.post_reaction(comment["reactions"]["url"], reaction)
 
 
 # ======================================================================================
@@ -482,7 +486,7 @@ def submit_check_run(
     if optional:
         check_run["output"] = {
             "title": "Trigger manually on demand.",
-            "summary": f"[Members](https://github.com/orgs/cp2k/people) can trigger this test run by commenting: `/cp2kci {target.short_name}`.",
+            "summary": f"[Members](https://github.com/orgs/cp2k/people) can trigger this test run by commenting: `/cp2kci {target.short_name}`",
         }
         check_run["completed_at"] = gh.now()
         check_run["conclusion"] = "neutral"

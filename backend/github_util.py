@@ -16,7 +16,7 @@ GITHUB_APP_ID = os.environ["GITHUB_APP_ID"]
 GITHUB_APP_KEY = Path(os.environ["GITHUB_APP_KEY"]).read_text()
 GITHUB_APP_INSTALL_ID = os.environ["GITHUB_APP_INSTALL_ID"]
 
-HttpMethods = Literal["GET", "POST", "PATCH"]
+HttpMethods = Literal["GET", "POST", "PATCH", "DELETE"]
 
 GITHUB_API_VERSION = "2026-03-10"
 
@@ -326,8 +326,14 @@ class GithubUtil:
             yield from page
 
     # --------------------------------------------------------------------------
-    def post_reaction(self, reaction_url: str, reaction: str) -> None:
-        self._post(reaction_url, {"content": reaction})
+    def clear_reactions(self, url: str) -> None:
+        for reaction in self._get(url):
+            if reaction["user"]["login"] == "cp2k-ci[bot]":
+                self._authenticated_http_request("DELETE", f"{url}/{reaction['id']}")
+
+    # --------------------------------------------------------------------------
+    def post_reaction(self, url: str, reaction: str) -> None:
+        self._post(url, {"content": reaction})
 
     # --------------------------------------------------------------------------
     def get_team(self, slug: str) -> Team:
