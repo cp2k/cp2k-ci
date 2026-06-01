@@ -599,7 +599,7 @@ def get_dashboard_report_sha(target_name: TargetName) -> Optional[str]:
     if blob:
         # We only download the first 1024 bytes which might break a unicode character.
         report = blob.download_as_string(end=1024).decode("utf8", errors="replace")
-        m = re.search("(^|\n)CommitSHA: (\w{40})\n", report)
+        m = re.search(r"(^|\n)CommitSHA: (\w{40})\n", report)
         if m:
             return str(m.group(2))
 
@@ -782,10 +782,10 @@ def publish_job_to_github(job: V1Job) -> None:
 def parse_report(report_blob: Any) -> Report:
     report = Report(status="UNKNOWN", summary="", git_sha=None)
     try:
-        report_txt = report_blob.download_as_string().decode("utf8")
-        report.summary = re.findall("(^|\n|\r)Summary: (.+?)[\n\r]", report_txt)[-1][1]
-        report.status = re.findall("(^|\n|\r)Status: (.+?)[\n\r]", report_txt)[-1][1]
-        report.git_sha = re.findall("(^|\n|\r)CommitSHA: (.+?)[\n\r]", report_txt)[0][1]
+        text = report_blob.download_as_string().decode("utf8")
+        report.summary = re.findall(r"(^|\n|\r)Summary: (.+?)[\n\r]", text)[-1][1]
+        report.status = re.findall(r"(^|\n|\r)Status: (.+?)[\n\r]", text)[-1][1]
+        report.git_sha = re.findall(r"(^|\n|\r)CommitSHA: (.+?)[\n\r]", text)[0][1]
         assert report.git_sha and len(report.git_sha) == 40
     except:
         report.summary = "Error while retrieving report."
