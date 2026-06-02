@@ -354,7 +354,7 @@ class GithubUtil:
         # Can't use pr["author_association"], it says "CONTRIBUTOR" for private members.
         try:
             url = f"https://api.github.com/orgs/cp2k/members/{user['login']}"
-            r = self._authenticated_http_request("GET", url, retries=5)
+            r = self._authenticated_http_request("GET", url)
             return r.status_code == 204
         except:
             return False

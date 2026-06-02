@@ -287,7 +287,7 @@ def process_github_event(event: str, body: GithubEvent) -> None:
 # ======================================================================================
 def process_pull_request_closed(gh: GithubUtil, pr: PullRequest) -> None:
     if pr["merged"] and not gh.is_org_member(pr["user"]):
-        print(f"Inviting user {pr['user']['login']} from #{pr['number']} to our org.")
+        print(f"Inviting user {pr['user']['login']} from PR #{pr['number']} to our org")
         dev_team = gh.get_team("cp2k-developers")
         gh.post_invitation(pr["user"], dev_team)
 
