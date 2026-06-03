@@ -47,6 +47,10 @@ for month in sorted(stats_per_month_per_target, reverse=True):
     usage_lines.append("-----------------------------------------------")
     for target, s in sorted(stats_per_target.items(), key=lambda kv: kv[1].hours, reverse=True):
         usage_lines.append(f"{target:30s} {s.count:6d} {s.hours:9.1f}")
+    usage_lines.append("-----------------------------------------------")
+    total_count = sum(s.count for s in stats_per_target.values())
+    total_hours = sum(s.hours for s in stats_per_target.values())
+    usage_lines.append(f"{'Sum':30s} {total_count:6d} {total_hours:9.1f}")
     usage_lines.append("\n\n\n")
 
 now = datetime.now(timezone.utc).replace(microsecond=0)
