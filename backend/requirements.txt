@@ -1,5 +1,5 @@
 PyJWT==2.13.0
-cryptography==48.0.1
+cryptography==50.0.0
 requests==2.34.2
 types-requests==2.33.0.20260518
 kubernetes==36.0.1
