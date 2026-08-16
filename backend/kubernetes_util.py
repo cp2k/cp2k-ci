@@ -16,6 +16,12 @@ from kubernetes.client.models.v1_job_list import V1JobList
 import google.auth.transport.requests
 import google.auth.compute_engine
 
+# A Job deadline includes time spent waiting for a node. Keep the runtime limit
+# on the Pod so queued jobs receive their full execution budget, while retaining
+# a longer Job lifetime limit to bound queueing and retries.
+POD_RUNTIME_LIMIT_SECONDS = 3 * 60 * 60
+JOB_LIFETIME_LIMIT_SECONDS = 12 * 60 * 60
+
 
 class KubernetesUtil:
     def __init__(
@@ -246,6 +252,7 @@ class KubernetesUtil:
             containers=[container],
             volumes=volumes,
             tolerations=[tol_costly, tol_arch],
+            active_deadline_seconds=POD_RUNTIME_LIMIT_SECONDS,
             termination_grace_period_seconds=0,
             restart_policy="OnFailure",  # https://github.com/kubernetes/kubernetes/issues/79398
             dns_policy="Default",  # bypass kube-dns
@@ -263,8 +270,10 @@ class KubernetesUtil:
 
         # job
         job_spec = self.api.V1JobSpec(
-            template=pod_template, backoff_limit=6, active_deadline_seconds=10800
-        )  # 3 hours
+            template=pod_template,
+            backoff_limit=6,
+            active_deadline_seconds=JOB_LIFETIME_LIMIT_SECONDS,
+        )
         job = self.api.V1Job(spec=job_spec, metadata=job_metadata)
         self.batch_api.create_namespaced_job(
             self.namespace, body=job, _request_timeout=self.timeout
