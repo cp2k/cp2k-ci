@@ -3,7 +3,7 @@
 
 from uuid import uuid4
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, Optional, List, TypedDict
 
 from target import Target, TargetName
 
@@ -13,6 +13,7 @@ import kubernetes.config
 import kubernetes.client
 from kubernetes.client.models.v1_resource_requirements import V1ResourceRequirements
 from kubernetes.client.models.v1_affinity import V1Affinity
+from kubernetes.client.models.v1_job import V1Job
 from kubernetes.client.models.v1_job_list import V1JobList
 
 import google.auth.transport.requests
@@ -24,7 +25,49 @@ import google.auth.compute_engine
 POD_RUNTIME_LIMIT_SECONDS = 3 * 60 * 60
 JOB_LIFETIME_LIMIT_SECONDS = 12 * 60 * 60
 
+# ======================================================================================
+JobAnnotations = TypedDict(
+    "JobAnnotations",
+    {
+        "cp2kci-repository": str,
+        "cp2kci-target": str,
+        "cp2kci-sender": str,
+        "cp2kci-force": str,
+        "cp2kci-dashboard": str,
+        "cp2kci-check-run-url": str,
+        "cp2kci-started": str,
+        "cp2kci-updated": str,
+        "cp2kci-submitted": str,
+        "cp2kci-report-url": str,
+        "cp2kci-report-path": str,
+        "cp2kci-artifacts-path": str,
+        "cp2kci-check-run-status": str,
+        "cp2kci-check-run-html-url": str,
+        "cp2kci-pull-request-number": str,
+        "cp2kci-pull-request-html-url": str,
+        "cp2kci-dashboard-published": str,
+    },
+    total=False,
+)
 
+
+# ======================================================================================
+class DatabaseJob:
+    def __init__(self, kube_job: V1Job):
+        self.name = kube_job.metadata.name
+        self.annotations: JobAnnotations = kube_job.metadata.annotations
+        self.is_active = job_is_active(kube_job)
+        self.is_completed = kube_job.status.completion_time is not None
+
+
+# ======================================================================================
+def job_is_active(kube_job: V1Job) -> bool:
+    # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#jobstatus-v1-batch
+    conditions = [c.type for c in kube_job.status.conditions or []]
+    return "Complete" not in conditions and "Failed" not in conditions
+
+
+# ======================================================================================
 class KubernetesUtil:
     def __init__(
         self,
@@ -44,7 +87,11 @@ class KubernetesUtil:
         self.batch_api = kubernetes.client.BatchV1Api()
 
         # https://docs.cloud.google.com/sql/docs/postgres/iam-logins#cloud-sql-auth-proxy
-        self.db = psycopg2.connect(host="127.0.0.1", user="cp2kci-backend@cp2k-org-project.iam", dbname="cp2k-ci")
+        self.db = psycopg2.connect(
+            host="127.0.0.1",
+            user="cp2kci-backend@cp2k-org-project.iam",
+            dbname="cp2k-ci",
+        )
         print(f"Opened database connection: {self.db }")
 
     # --------------------------------------------------------------------------
@@ -72,17 +119,18 @@ class KubernetesUtil:
         return str(upload_url)
 
     # --------------------------------------------------------------------------
-    def list_jobs(self, selector: str) -> V1JobList:
+    def list_jobs(self) -> List[DatabaseJob]:
+        selector = "cp2kci=run"
         job_list = self.batch_api.list_namespaced_job(
             self.namespace, label_selector=selector, _request_timeout=self.timeout
         )  # type: ignore
-        return cast(V1JobList, job_list)
+        return [DatabaseJob(kube_job) for kube_job in job_list.items]
 
     # --------------------------------------------------------------------------
-    def delete_job(self, job_name: str) -> None:
-        print("deleting job: " + job_name)
+    def delete_job(self, job: DatabaseJob) -> None:
+        print("deleting job: " + job.name)
         self.batch_api.delete_namespaced_job(
-            job_name,
+            job.name,
             self.namespace,
             propagation_policy="Background",
             _request_timeout=self.timeout,
@@ -90,13 +138,15 @@ class KubernetesUtil:
 
     # --------------------------------------------------------------------------
     def patch_job_annotations(
-        self, job_name: str, new_annotations: Dict[str, str]
+        self, job: DatabaseJob, partial_annotations: JobAnnotations
     ) -> None:
+        new_annotations = dict(job.annotations)  # copy
+        new_annotations.update(partial_annotations)
         new_annotations["cp2kci-updated"] = self.now()
         new_job_metadata = self.api.V1ObjectMeta(annotations=new_annotations)
         new_job = self.api.V1Job(metadata=new_job_metadata)
         self.batch_api.patch_namespaced_job(
-            job_name, self.namespace, new_job, _request_timeout=self.timeout
+            job.name, self.namespace, new_job, _request_timeout=self.timeout
         )  # type: ignore
 
         # also update annotations of report_blob
@@ -134,7 +184,7 @@ class KubernetesUtil:
         target: Target,
         git_branch: str,
         git_ref: str,
-        job_annotations: Dict[str, str],
+        job_annotations: JobAnnotations,
         use_cache: bool = True,
         priority: Optional[str] = None,
     ) -> None:

@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional, Tuple, List, Literal, Union, TypedDict, 
 
 from target import Target, TargetName
 from repository_config import REPOSITORY_CONFIGS, get_repository_config_by_name
-from kubernetes_util import KubernetesUtil
+from kubernetes_util import KubernetesUtil, DatabaseJob, JobAnnotations
 from github_util import (
     GithubUtil,
     CommitSha,
@@ -27,13 +27,9 @@ from github_util import (
     GithubEvent,
 )
 
-from kubernetes.client.models.v1_job_list import V1JobList
-from kubernetes.client.models.v1_job import V1Job
-
 import google.auth
 import google.cloud.pubsub  # type: ignore
 import google.cloud.storage  # type: ignore
-
 
 gcp_project: str = google.auth.default()[1] or ""
 storage_client = google.cloud.storage.Client(project=gcp_project)
@@ -142,18 +138,17 @@ def main() -> None:
 
 # ======================================================================================
 def tick(cycle: int) -> None:
-    run_job_list = kubeutil.list_jobs("cp2kci=run")
+    run_job_list = kubeutil.list_jobs()
     if cycle % 30 == 0:  # every 2.5 minutes
         poll_pull_requests(run_job_list)
-    for job in run_job_list.items:
+    for job in run_job_list:
         record_job_start_time(job)
-        job_annotations = job.metadata.annotations
-        if "cp2kci-dashboard" in job_annotations:
+        if "cp2kci-dashboard" in job.annotations:
             publish_job_to_dashboard(job)
-        if "cp2kci-check-run-url" in job_annotations:
+        if "cp2kci-check-run-url" in job.annotations:
             publish_job_to_github(job)
-        if job.status.completion_time and "cp2kci-force" not in job_annotations:
-            kubeutil.delete_job(job.metadata.name)  # keep failed jobs for investigation
+        if job.is_completed and "cp2kci-force" not in job.annotations:
+            kubeutil.delete_job(job)  # keep failed jobs for investigation
 
 
 # ======================================================================================
@@ -506,19 +501,21 @@ def submit_check_run(
 
     # Delete old jobs - in case there are any.
     for job in list_check_run_jobs(target.name, pr):
-        print(f"Deleting old job {job.metadata.name}.")
-        kubeutil.delete_job(job.metadata.name)
+        print(f"Deleting old job {job.name}.")
+        kubeutil.delete_job(job)
 
     # Let's submit the new job.
     check_run = gh.post_check_run(check_run)
-    job_annotations = {
-        "cp2kci-sender": sender,
-        "cp2kci-pull-request-number": str(pr["number"]),
-        "cp2kci-pull-request-html-url": pr["html_url"],
-        "cp2kci-check-run-url": check_run["url"],
-        "cp2kci-check-run-html-url": check_run["html_url"],
-        "cp2kci-check-run-status": "queued",
-    }
+    job_annotations = JobAnnotations(
+        {
+            "cp2kci-sender": sender,
+            "cp2kci-pull-request-number": str(pr["number"]),
+            "cp2kci-pull-request-html-url": pr["html_url"],
+            "cp2kci-check-run-url": check_run["url"],
+            "cp2kci-check-run-html-url": check_run["html_url"],
+            "cp2kci-check-run-status": "queued",
+        }
+    )
     kubeutil.submit_run(
         target,
         git_branch=f"pull/{pr['number']}/merge",
@@ -532,18 +529,17 @@ def submit_check_run(
 # ======================================================================================
 def list_check_run_jobs(
     target_pattern: TargetName | Literal["*"], pr: PullRequest
-) -> List[V1Job]:
+) -> List[DatabaseJob]:
 
     results = []
-    for job in kubeutil.list_jobs("cp2kci=run").items:
-        job_annotations = job.metadata.annotations
-        if "cp2kci-pull-request-number" not in job_annotations:
+    for job in kubeutil.list_jobs():
+        if "cp2kci-pull-request-number" not in job.annotations:
             continue
-        if int(job_annotations["cp2kci-pull-request-number"]) != pr["number"]:
+        if int(job.annotations["cp2kci-pull-request-number"]) != pr["number"]:
             continue
-        if job_annotations["cp2kci-check-run-status"] == "completed":
+        if job.annotations["cp2kci-check-run-status"] == "completed":
             continue
-        if target_pattern not in ("*", job_annotations["cp2kci-target"]):
+        if target_pattern not in ("*", job.annotations["cp2kci-target"]):
             continue
         results.append(job)
     return results
@@ -558,13 +554,12 @@ def cancel_check_runs(
     set_skipped: bool = False,
 ) -> None:
     for job in list_check_run_jobs(target_pattern, pr):
-        print(f"Canceling job {job.metadata.name}.")
-        job_annotations = job.metadata.annotations
-        summary = "[Partial Report]({})".format(job_annotations["cp2kci-report-url"])
+        print(f"Canceling job {job.name}.")
+        summary = "[Partial Report]({})".format(job.annotations["cp2kci-report-url"])
         summary += f"\n\nCancelled by @{sender}."
         conclusion = "skipped" if set_skipped else "cancelled"
         check_run: CheckRun = {
-            "url": job_annotations["cp2kci-check-run-url"],
+            "url": job.annotations["cp2kci-check-run-url"],
             "status": "completed",
             "conclusion": conclusion,
             "completed_at": gh.now(),
@@ -572,7 +567,7 @@ def cancel_check_runs(
             "actions": build_restart_actions(),
         }
         gh.patch_check_run(check_run)
-        kubeutil.delete_job(job.metadata.name)
+        kubeutil.delete_job(job)
 
 
 # ======================================================================================
@@ -581,12 +576,12 @@ def submit_dashboard_test(target: Target, head_sha: str, force: bool = False) ->
 
     if not force:
         # Check if a dashboard job for given target is already underway.
-        run_job_list = kubeutil.list_jobs("cp2kci=run")
-        for job in run_job_list.items:
+        run_job_list = kubeutil.list_jobs()
+        for job in run_job_list:
             if (
-                job.metadata.annotations["cp2kci-target"] == target.name
-                and "cp2kci-dashboard" in job.metadata.annotations
-                and job_is_active(job)
+                job.annotations["cp2kci-target"] == target.name
+                and "cp2kci-dashboard" in job.annotations
+                and job.is_active
             ):
                 print(f"Found already underway dashboard job for: {target.name}.")
                 return  # Do not submit another job.
@@ -606,7 +601,7 @@ def submit_dashboard_test(target: Target, head_sha: str, force: bool = False) ->
                 return  # Won't submit a job without up-to-date cache_from image.
 
     # Finally submit a new job.
-    job_annotations = {"cp2kci-dashboard": "yes"}
+    job_annotations = JobAnnotations({"cp2kci-dashboard": "yes"})
     if force:
         job_annotations["cp2kci-force"] = "yes"
     kubeutil.submit_run(target, "master", head_sha, job_annotations)
@@ -640,14 +635,13 @@ def get_dashboard_report_sha(target_name: TargetName) -> Optional[str]:
 
 
 # ======================================================================================
-def poll_pull_requests(job_list: V1JobList) -> None:
+def poll_pull_requests(job_list: List[DatabaseJob]) -> None:
     """A save guard in case we're missing a callback or loosing BatchJob"""
 
     active_check_runs_urls = []
-    for job in job_list.items:
-        annotations = job.metadata.annotations
-        if job_is_active(job) and "cp2kci-check-run-url" in annotations:
-            active_check_runs_urls.append(annotations["cp2kci-check-run-url"])
+    for job in job_list:
+        if job.is_active and "cp2kci-check-run-url" in job.annotations:
+            active_check_runs_urls.append(job.annotations["cp2kci-check-run-url"])
 
     for repo_config in REPOSITORY_CONFIGS:
         gh = GithubUtil(repo_config.name)
@@ -700,43 +694,39 @@ def poll_pull_requests(job_list: V1JobList) -> None:
 
 
 # ======================================================================================
-def record_job_start_time(job: V1Job) -> None:
-    job_annotations = job.metadata.annotations
-    if "cp2kci-started" not in job_annotations:
-        report_blob = output_bucket.get_blob(job_annotations["cp2kci-report-path"])
+def record_job_start_time(job: DatabaseJob) -> None:
+    if "cp2kci-started" not in job.annotations:
+        report_blob = output_bucket.get_blob(job.annotations["cp2kci-report-path"])
         if report_blob.size and report_blob.size > 100:
-            job_annotations["cp2kci-started"] = kubeutil.now()
-            kubeutil.patch_job_annotations(job.metadata.name, job_annotations)
+            kubeutil.patch_job_annotations(job, {"cp2kci-started": kubeutil.now()})
 
 
 # ======================================================================================
-def publish_job_to_dashboard(job: V1Job) -> None:
-    job_annotations = job.metadata.annotations
-    if job_is_active(job):
+def publish_job_to_dashboard(job: DatabaseJob) -> None:
+    if job.is_active:
         return
 
-    if "cp2kci-dashboard-published" in job_annotations:
+    if "cp2kci-dashboard-published" in job.annotations:
         return
 
-    target_name = job_annotations["cp2kci-target"]
+    target_name = job.annotations["cp2kci-target"]
     print(f"Publishing {target_name} to dashboard.")
 
     assert target_name.startswith("cp2k-")
     test_name = target_name[5:]
 
-    src_blob = output_bucket.blob(job_annotations["cp2kci-report-path"])
+    src_blob = output_bucket.blob(job.annotations["cp2kci-report-path"])
     if src_blob.exists():
         dest_blob = output_bucket.blob("dashboard_" + test_name + "_report.txt")
         dest_blob.rewrite(src_blob)
 
-    src_blob = output_bucket.blob(job_annotations["cp2kci-artifacts-path"])
+    src_blob = output_bucket.blob(job.annotations["cp2kci-artifacts-path"])
     if src_blob.exists():
         dest_blob = output_bucket.blob("dashboard_" + test_name + "_artifacts.zip")
         dest_blob.rewrite(src_blob)
 
     # update job_annotations
-    job_annotations["cp2kci-dashboard-published"] = "yes"
-    kubeutil.patch_job_annotations(job.metadata.name, job_annotations)
+    kubeutil.patch_job_annotations(job, {"cp2kci-dashboard-published": "yes"})
 
 
 # ======================================================================================
@@ -756,20 +746,19 @@ def build_restart_actions() -> List[CheckRunAction]:
 
 
 # ======================================================================================
-def publish_job_to_github(job: V1Job) -> None:
-    status = "in_progress" if job_is_active(job) else "completed"
+def publish_job_to_github(job: DatabaseJob) -> None:
+    status = "in_progress" if job.is_active else "completed"
 
     # failed jobs are handled by poll_pull_requests()
 
-    job_annotations = job.metadata.annotations
-    if job_annotations["cp2kci-check-run-status"] == status:
+    if job.annotations["cp2kci-check-run-status"] == status:
         return  # Nothing to do - check_run already uptodate.
 
-    target_name = job_annotations["cp2kci-target"]
+    target_name = job.annotations["cp2kci-target"]
     print(f"Publishing {target_name} to Github.")
 
-    gh = GithubUtil(job_annotations["cp2kci-repository"])
-    report_blob = output_bucket.blob(job_annotations["cp2kci-report-path"])
+    gh = GithubUtil(job.annotations["cp2kci-repository"])
+    report_blob = output_bucket.blob(job.annotations["cp2kci-report-path"])
     check_run: CheckRun = {"status": status, "output": {}}
     if status == "completed":
         report = parse_report(report_blob)
@@ -779,7 +768,7 @@ def publish_job_to_github(job: V1Job) -> None:
         check_run["output"]["title"] = report.summary
         summary = f"[Detailed Report]({report_blob.public_url})"
         # Did the run upload artifacts?
-        artifacts_path = job_annotations["cp2kci-artifacts-path"]
+        artifacts_path = job.annotations["cp2kci-artifacts-path"]
         artifacts_blob = output_bucket.get_blob(artifacts_path)
         if artifacts_blob:
             size_mib = artifacts_blob.size / 1024 / 1024
@@ -798,17 +787,16 @@ def publish_job_to_github(job: V1Job) -> None:
             }
         ]
 
-    sender = job_annotations["cp2kci-sender"]
+    sender = job.annotations["cp2kci-sender"]
     summary += f"\n\nTriggered by @{sender}."
     check_run["output"]["summary"] = summary
 
     # update check_run
-    check_run["url"] = job_annotations["cp2kci-check-run-url"]
+    check_run["url"] = job.annotations["cp2kci-check-run-url"]
     gh.patch_check_run(check_run)
 
     # update job_annotations
-    job_annotations["cp2kci-check-run-status"] = status
-    kubeutil.patch_job_annotations(job.metadata.name, job_annotations)
+    kubeutil.patch_job_annotations(job, {"cp2kci-check-run-status": status})
 
 
 # ======================================================================================
@@ -825,13 +813,6 @@ def parse_report(report_blob: Any) -> Report:
         print(traceback.format_exc())
 
     return report
-
-
-# ======================================================================================
-def job_is_active(job: V1Job) -> bool:
-    # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#jobstatus-v1-batch
-    conditions = [c.type for c in job.status.conditions or []]
-    return "Complete" not in conditions and "Failed" not in conditions
 
 
 # ======================================================================================
