@@ -8,8 +8,9 @@ RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true && \
     vim \
     wget \
     python3 \
-    python3-pip \
     python3-venv \
+    python3-pip \
+    python3-wheel \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/cp2kci-backend
@@ -28,6 +29,9 @@ RUN pip3 freeze
 COPY *.py *.conf ./
 
 RUN mypy --strict backend.py
+
+# For real-time logging.
+ENV PYTHONUNBUFFERED=1
 
 CMD ["./backend.py"]
 

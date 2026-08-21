@@ -7,11 +7,11 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: cp2kci-backend-app
+      app.kubernetes.io/name: cp2kci-backend-app
   template:
     metadata:
       labels:
-        app: cp2kci-backend-app
+        app.kubernetes.io/name: cp2kci-backend-app
     spec:
       terminationGracePeriodSeconds: 1
       # This is the kubernetes account, there is also a GCP backend account.
@@ -24,6 +24,16 @@ spec:
       - name: github-app-key-volume
         secret:
           secretName: "github-app-key"
+      initContainers:
+      - name: cloud-sql-proxy-container
+        restartPolicy: Always
+        securityContext:
+          runAsNonRoot: true
+        image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
+        args:
+          - "--auto-iam-authn"
+          - "--structured-logs"
+          - "cp2k-org-project:us-central1:cp2k-ci-postgres"
       containers:
       - image: "us-central1-docker.pkg.dev/cp2k-org-project/cp2kci/img_cp2kci_backend:latest"
         name: cp2kci-backend-container

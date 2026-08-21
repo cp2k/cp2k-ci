@@ -7,6 +7,8 @@ from typing import Any, Dict, Optional, cast
 
 from target import Target, TargetName
 
+import psycopg2
+
 import kubernetes.config
 import kubernetes.client
 from kubernetes.client.models.v1_resource_requirements import V1ResourceRequirements
@@ -40,6 +42,10 @@ class KubernetesUtil:
         self.namespace = namespace
         self.api = kubernetes.client
         self.batch_api = kubernetes.client.BatchV1Api()
+
+        # https://docs.cloud.google.com/sql/docs/postgres/iam-logins#cloud-sql-auth-proxy
+        self.db = psycopg2.connect(host="127.0.0.1", user="cp2kci-backend@cp2k-org-project.iam", dbname="cp2k-ci")
+        print(f"Opened database connection: {self.db }")
 
     # --------------------------------------------------------------------------
     def get_upload_url(
