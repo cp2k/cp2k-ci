@@ -1,6 +1,7 @@
 # author: Ole Schuett
 
 
+import json
 from uuid import uuid4
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, List, TypedDict
@@ -92,9 +93,10 @@ class KubernetesUtil:
             user="cp2kci-backend@cp2k-org-project.iam",
             dbname="cp2k-ci",
         )
+        self.db.autocommit = True
         print(f"Opened database connection: {self.db }")
 
-    # --------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def get_upload_url(
         self, path: str, content_type: str = "text/plain;charset=utf-8"
     ) -> str:
@@ -118,7 +120,7 @@ class KubernetesUtil:
         )
         return str(upload_url)
 
-    # --------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def list_jobs(self) -> List[DatabaseJob]:
         selector = "cp2kci=run"
         job_list = self.batch_api.list_namespaced_job(
@@ -126,7 +128,7 @@ class KubernetesUtil:
         )  # type: ignore
         return [DatabaseJob(kube_job) for kube_job in job_list.items]
 
-    # --------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def delete_job(self, job: DatabaseJob) -> None:
         print("deleting job: " + job.name)
         self.batch_api.delete_namespaced_job(
@@ -136,7 +138,11 @@ class KubernetesUtil:
             _request_timeout=self.timeout,
         )  # type: ignore
 
-    # --------------------------------------------------------------------------
+        # mark deleted in database
+        with self.db.cursor() as curs:
+            curs.execute("UPDATE jobs SET is_deleted=TRUE WHERE name=%s", (job.name,))
+
+    # ----------------------------------------------------------------------------------
     def patch_job_annotations(
         self, job: DatabaseJob, partial_annotations: JobAnnotations
     ) -> None:
@@ -155,18 +161,25 @@ class KubernetesUtil:
             report_blob.metadata = new_annotations
             report_blob.patch()
 
-    # --------------------------------------------------------------------------
+        # update database
+        with self.db.cursor() as curs:
+            curs.execute(
+                "UPDATE jobs SET annotations=%s WHERE name=%s",
+                (json.dumps(new_annotations), job.name),
+            )
+
+    # ----------------------------------------------------------------------------------
     def now(self) -> str:
         return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
-    # --------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def resources(self, target: Target) -> V1ResourceRequirements:
         req_cpu = 0.9 * target.cpu  # Request 10% less to leave some for kubernetes.
         return self.api.V1ResourceRequirements(
             requests={"cpu": str(req_cpu)}, limits={"nvidia.com/gpu": str(target.gpu)}
         )
 
-    # --------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def affinity(self, target: Target) -> V1Affinity:
         requirement = self.api.V1NodeSelectorRequirement(
             key="cloud.google.com/gke-nodepool", operator="In", values=target.nodepools
@@ -178,7 +191,7 @@ class KubernetesUtil:
         )
         return self.api.V1Affinity(node_affinity=node_affinity)
 
-    # --------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def submit_run(
         self,
         target: Target,
@@ -334,6 +347,13 @@ class KubernetesUtil:
         self.batch_api.create_namespaced_job(
             self.namespace, body=job, _request_timeout=self.timeout
         )  # type: ignore
+
+        # insert into database
+        with self.db.cursor() as curs:
+            curs.execute(
+                "INSERT INTO jobs (name, annotations) VALUES (%s, %s)",
+                (job_name, json.dumps(job_annotations)),
+            )
 
 
 # EOF

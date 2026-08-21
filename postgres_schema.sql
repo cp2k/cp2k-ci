@@ -1,0 +1,14 @@
+CREATE TABLE jobs (
+    jobid INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    annotations JSONB NOT NULL,
+    is_deleted BOOLEAN NOT NULL DEFAULT false,
+    created TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO cloudsqlsuperuser;
+GRANT ALL PRIVILEGES ON SCHEMA public TO cloudsqlsuperuser;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO cloudsqlsuperuser;
+GRANT ALL ON SCHEMA public TO cloudsqlsuperuser;
+
+-- EOF
