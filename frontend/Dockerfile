@@ -30,6 +30,6 @@ RUN mypy --strict frontend.py
 # For real-time logging.
 ENV PYTHONUNBUFFERED=1
 
-CMD ["gunicorn", "--bind=:8080", "--workers=1", "--threads=8", "--timeout=0", "frontend:app"]
+CMD ["./frontend.py", "--port=8080"]
 
 #EOF

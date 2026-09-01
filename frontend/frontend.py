@@ -6,16 +6,16 @@ import os
 import json
 import hmac
 import hashlib
-import logging
-from flask import Flask, request, abort, Response
+import argparse
 import urllib.parse
 import mimetypes
-import os
 import fsspec  # type: ignore
 from zipfile import ZipFile
 from typing import Any
 
 import psycopg2
+import aiohttp
+from aiohttp import web
 
 import google.auth
 import google.cloud.pubsub  # type: ignore
@@ -25,61 +25,75 @@ import google.cloud.pubsub  # type: ignore
 # logging.basicConfig(level=logging.DEBUG)
 
 publish_client = google.cloud.pubsub.PublisherClient()
-
-app = Flask(__name__)
-app.config["GITHUB_WEBHOOK_SECRET"] = os.environ["GITHUB_WEBHOOK_SECRET"]
-app.logger.setLevel(logging.INFO)
-
 project: str = google.auth.default()[1] or ""
 pubsub_topic = "projects/" + project + "/topics/cp2kci-topic"
 
-app.logger.info("CP2K-CI frontend is up and running :-)")
+GITHUB_WEBHOOK_SECRET = web.AppKey("github_webhook_secret", str)
 
 
 # ======================================================================================
-@app.route("/robots.txt")
-def robots() -> Response:
-    return Response("User-agent: *\nDisallow: /\n", mimetype="text/plain")
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=8888)
+    args = parser.parse_args()
+
+    app = web.Application()
+    app[GITHUB_WEBHOOK_SECRET] = os.environ["GITHUB_WEBHOOK_SECRET"]
+
+    # Setup routes.
+    app.router.add_get("/robots.txt", handle_robots_txt)
+    app.router.add_get("/health", handle_health)
+    app.router.add_get("/status", handle_status)
+    app.router.add_post("/github_app_webhook", handle_github_app_webhook)
+    app.router.add_get("/artifacts/{archive:([^/]+)}/{path:(.*)}", handle_artifacts)
+
+    # Start listening for requests.
+    print("CP2K-CI frontend is up and running :-)")
+    web.run_app(app, port=args.port)
 
 
 # ======================================================================================
-@app.route("/health")
-def healthz() -> str:
+async def handle_robots_txt(request: web.Request) -> web.Response:
+    return web.Response(text="User-agent: *\nDisallow: /\n")
+
+
+# ======================================================================================
+async def handle_health(request: web.Request) -> web.Response:
     # TODO: find a way to return queue size or some other end-to-end health metric.
     message_backend(rpc="update_healthz_beacon")
-    return "I feel good :-)"
+    return web.Response(text="I feel good :-)")
 
 
 # ======================================================================================
-@app.route("/status")
-def status() -> str:
-    db = psycopg2.connect() # uses psql environment variables
+async def handle_status(request: web.Request) -> web.Response:
+    db = psycopg2.connect()  # uses psql environment variables
     db.autocommit = True
     with db.cursor() as cur:
         cur.execute("SELECT count(1) FROM jobs")
         row = cur.fetchone()
         num_jobs = row[0] if row else 0
     db.close()
-    return f"Found {num_jobs} jobs in database."
+    return web.Response(text=f"Found {num_jobs} jobs in database.")
+
 
 # ======================================================================================
-@app.route("/github_app_webhook", methods=["POST"])
-def github_app_webhook() -> str:
+async def handle_github_app_webhook(request: web.Request) -> web.Response:
     # check signature
     ext_signature = request.headers["X-Hub-Signature"]
-    secret = app.config["GITHUB_WEBHOOK_SECRET"].encode("utf8")
-    my_signature = "sha1=" + hmac.new(secret, request.data, hashlib.sha1).hexdigest()
+    secret = request.app[GITHUB_WEBHOOK_SECRET].encode("utf8")
+    payload = await request.read()
+    my_signature = "sha1=" + hmac.new(secret, payload, hashlib.sha1).hexdigest()
     if not hmac.compare_digest(my_signature, ext_signature):
-        return abort(401, "Signature wrong.")  # access denied
+        return web.Response(text="Signature wrong.", status=401)  # access denied
 
     event = request.headers["X-GitHub-Event"]
-    body = request.get_json()
+    body = json.loads(payload)
     action = body.get("action", "")
-    app.logger.info("Got github even: {} action: {}".format(event, action))
+    print("Got github even: {} action: {}".format(event, action))
 
     # Forward everything to the backend.
     message_backend(rpc="github_event", event=event, body=body)
-    return "Ok - queued backend task."
+    return web.Response(text="Ok - queued backend task.")
 
 
 # ======================================================================================
@@ -90,9 +104,9 @@ def message_backend(**args: Any) -> None:
 
 
 # ======================================================================================
-@app.route("/artifacts/<archive>/")
-@app.route("/artifacts/<archive>/<path:path>")
-def artifacts(archive: str, path: str = "") -> Response:
+async def handle_artifacts(request: web.Request) -> web.Response:
+    archive = request.match_info["archive"]
+    path = request.match_info.get("path", "")
     fs = fsspec.filesystem("https")
     archive_quoted = urllib.parse.quote(archive)
     url = f"https://storage.googleapis.com/cp2k-ci/{archive_quoted}_artifacts.zip"
@@ -106,11 +120,11 @@ def artifacts(archive: str, path: str = "") -> Response:
             with ZipFile(remote_file) as zip_file:
                 return browse_zipfile(zip_file, path)
     except FileNotFoundError:
-        return Response("Artifact not found.", status=404)
+        return web.Response(text="Artifact not found.", status=404)
 
 
 # ======================================================================================
-def browse_zipfile(zip_file: ZipFile, path: str) -> Response:
+def browse_zipfile(zip_file: ZipFile, path: str) -> web.Response:
     filenames = {i.filename for i in zip_file.infolist() if not i.is_dir()}
 
     if path in filenames:
@@ -118,14 +132,14 @@ def browse_zipfile(zip_file: ZipFile, path: str) -> Response:
             mimetypes.add_type("text/plain", ext)
         mt = mimetypes.guess_type(path)[0]
         with zip_file.open(path) as f:
-            return Response(f.read(), mimetype=mt)
+            return web.Response(body=f.read(), content_type=mt)
 
     if path and not path.endswith("/"):
-        return Response("File not found.", status=404)
+        return web.Response(text="File not found.", status=404)
 
     candidates = {fn[len(path) :] for fn in filenames if fn.startswith(path)}
     if not candidates:
-        return Response("Directory not found", status=404)
+        return web.Response(text="Directory not found", status=404)
 
     # List directory.
     sub_dirs = {fn.split("/", 1)[0] for fn in candidates if "/" in fn}
@@ -143,11 +157,11 @@ def browse_zipfile(zip_file: ZipFile, path: str) -> Response:
         output += [f"<li><a href='./{name}'>📄 {name}<a></li>"]
     output += [f"</ul>"]
     output += ["</body></html>"]
-    return Response("\n".join(output))
+    return web.Response(text="\n".join(output), content_type="text/html")
 
 
 # ======================================================================================
 if __name__ == "__main__":
-    app.run()
+    main()
 
 # EOF

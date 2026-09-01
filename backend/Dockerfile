@@ -5,11 +5,9 @@ FROM ubuntu:26.04
 # install Ubuntu packages
 RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true && \
     apt-get update && apt-get install -y --no-install-recommends \
-    vim \
-    wget \
     python3 \
-    python3-venv \
     python3-pip \
+    python3-venv \
     python3-wheel \
   && rm -rf /var/lib/apt/lists/*
 
