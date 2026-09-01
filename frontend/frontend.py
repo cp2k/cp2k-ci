@@ -15,6 +15,8 @@ import fsspec  # type: ignore
 from zipfile import ZipFile
 from typing import Any
 
+import psycopg2
+
 import google.auth
 import google.cloud.pubsub  # type: ignore
 
@@ -47,6 +49,18 @@ def healthz() -> str:
     message_backend(rpc="update_healthz_beacon")
     return "I feel good :-)"
 
+
+# ======================================================================================
+@app.route("/status")
+def status() -> str:
+    db = psycopg2.connect() # uses psql environment variables
+    db.autocommit = True
+    with db.cursor() as cur:
+        cur.execute("SELECT count(1) FROM jobs")
+        row = cur.fetchone()
+        num_jobs = row[0] if row else 0
+    db.close()
+    return f"Found {num_jobs} jobs in database."
 
 # ======================================================================================
 @app.route("/github_app_webhook", methods=["POST"])
