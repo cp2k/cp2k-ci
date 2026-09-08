@@ -1,0 +1,46 @@
+# author: Ole Schuett
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cp2kci-kube-runner-deployment
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cp2kci-kube-runner-app
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cp2kci-kube-runner-app
+    spec:
+      terminationGracePeriodSeconds: 1
+      # This is the kubernetes account, there is also a GCP backend account.
+      serviceAccountName: cp2kci-backend-k8s-account
+      automountServiceAccountToken: True
+      dnsPolicy: Default
+      nodeSelector:
+        node.kubernetes.io/instance-type: n2d-standard-2
+      initContainers:
+      - name: cloud-sql-proxy-container
+        restartPolicy: Always
+        securityContext:
+          runAsNonRoot: true
+        image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
+        args:
+          - "--auto-iam-authn"
+          - "--structured-logs"
+          - "cp2k-org-project:us-central1:cp2k-ci-postgres"
+      containers:
+      - image: "us-central1-docker.pkg.dev/cp2k-org-project/cp2kci/img_cp2kci_kube-runner:latest"
+        name: main-container
+        resources:
+          requests:
+            memory: 250M
+            cpu: 1m # Actually needs more, but kube-dns asked for too much.
+        #livenessProbe:
+        #  periodSeconds: 60
+        #  httpGet:
+        #    port: 5000
+        #    path: /healthz
+
+#EOF
