@@ -43,6 +43,7 @@ def main() -> None:
     app[GITHUB_WEBHOOK_SECRET] = os.environ["GITHUB_WEBHOOK_SECRET"]
 
     # Setup routes.
+    app.router.add_get("/favicon.ico", handle_favicon)
     app.router.add_get("/robots.txt", handle_robots_txt)
     app.router.add_get("/health", handle_health)
     app.router.add_get("/jobs", handle_jobs)
@@ -52,6 +53,11 @@ def main() -> None:
     # Start listening for requests.
     print("CP2K-CI frontend is up and running :-)")
     web.run_app(app, port=args.port)
+
+
+# ======================================================================================
+async def handle_favicon(request: web.Request) -> web.StreamResponse:
+    return web.FileResponse(path="./favicon.svg")
 
 
 # ======================================================================================

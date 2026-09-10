@@ -25,7 +25,7 @@ RUN pip3 freeze
 
 # Install app.
 COPY templates ./templates/
-COPY frontend.py ./
+COPY frontend.py favicon.svg ./
 RUN mypy --strict frontend.py
 
 # For real-time logging.
