@@ -13,7 +13,9 @@ import fsspec  # type: ignore
 from zipfile import ZipFile
 from typing import Any
 
+import jinja2
 import psycopg2
+import psycopg2.extras
 import aiohttp
 from aiohttp import web
 
@@ -43,7 +45,7 @@ def main() -> None:
     # Setup routes.
     app.router.add_get("/robots.txt", handle_robots_txt)
     app.router.add_get("/health", handle_health)
-    app.router.add_get("/status", handle_status)
+    app.router.add_get("/jobs", handle_jobs)
     app.router.add_post("/github_app_webhook", handle_github_app_webhook)
     app.router.add_get("/artifacts/{archive:([^/]+)}/{path:(.*)}", handle_artifacts)
 
@@ -65,15 +67,22 @@ async def handle_health(request: web.Request) -> web.Response:
 
 
 # ======================================================================================
-async def handle_status(request: web.Request) -> web.Response:
+async def handle_jobs(request: web.Request) -> web.Response:
+    with open("templates/jobs.html.jinja") as f:
+        tmpl = jinja2.Template(f.read())
+
     db = psycopg2.connect()  # uses psql environment variables
     db.autocommit = True
-    with db.cursor() as cur:
-        cur.execute("SELECT count(1) FROM jobs")
-        row = cur.fetchone()
-        num_jobs = row[0] if row else 0
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute("""SELECT name, state, spec, annotations, created, started, finished
+            FROM jobs WHERE age(now(), created) < INTERVAL '24 hours'
+            ORDER BY jobid DESC""")
+        jobs = cur.fetchall()
+
+    html = tmpl.render(jobs=jobs)
     db.close()
-    return web.Response(text=f"Found {num_jobs} jobs in database.")
+
+    return web.Response(text=html, content_type="text/html")
 
 
 # ======================================================================================

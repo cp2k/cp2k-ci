@@ -2,8 +2,6 @@ PyJWT==2.13.0
 cryptography==50.0.0
 requests==2.34.2
 types-requests==2.33.0.20260712
-kubernetes==36.0.3
-kubernetes-typed==18.20.2
 google-cloud-pubsub==2.39.1
 google-cloud-storage==3.13.1
 psycopg2-binary==2.9.12

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head><title>CP2K-CI: Recent Jobs</title></head>
+<body>
+    <h1>CP2K-CI: Recent Jobs</h1>
+    <table border=1 style="text-align:right;">
+        <thead><tr>
+            <th>name</th>
+            <th>state</th>
+            <th>created</th>
+            <th>started</th>
+            <th>finished</th>
+            <th>pull request</th>
+            <th>check run</th>
+        </tr></thead>
+        {% for job in jobs %}
+        <tr>
+            <td>
+                <a target="_blank" href="https://storage.googleapis.com/cp2k-ci/{{ job["name"] }}_report.txt">
+                    {{ job["name"] }}
+                </a>
+            </td>
+            <td>{{ job["state"] }}</td>
+            <td>{{ job["created"].isoformat(sep=' ')[:16] }}</td>
+            <td>{{ job["started"] and job["started"].isoformat(sep=' ')[:16] }}</td>
+            <td>{{ job["finished"] and job["finished"].isoformat(sep=' ')[:16] }}</td>
+            <td>
+                {% if "cp2kci-pull-request-number" in job["annotations"] %}
+                    <a target="_blank" href="{{ job["annotations"]["cp2kci-pull-request-html-url"] }}">
+                        #{{ job["annotations"]["cp2kci-pull-request-number"] }}
+                    </a>
+                {% endif %}
+            </td>
+            <td>
+                {% if "cp2kci-check-run-html-url" in job["annotations"] %}
+                    <a target="_blank" href="{{ job["annotations"]["cp2kci-check-run-html-url"] }}">
+                        link
+                    </a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    Found {{ jobs | length }} recent jobs.
+  </body>
+</html>

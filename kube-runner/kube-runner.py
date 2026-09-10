@@ -58,7 +58,7 @@ def main() -> None:
     db.autocommit = True
     print(f"Opened database connection: {db}")
 
-    print("starting main loop")
+    print("Starting main loop.")
     for i in itertools.count():
         try:
             process_new(db, kube)
@@ -122,14 +122,14 @@ def process_active(db: DbConnection, kube: KubeClient) -> None:
             if db_states[jobname] == "CANCELING":
                 update_job_state(db, jobname, "CANCELED", finished=True)
             else:
-                print(f"Found orphan db job {jobname} in state {db_states[jobname]}.")
+                print(f"Found orphan job {jobname} in state {db_states[jobname]}.")
                 update_job_state(db, jobname, "FAILED", finished=True)
 
         elif jobname not in db_states:
             continue  # Ignore leftover kubernetes jobs.
 
         elif db_states[jobname] == "CANCELING":
-            print(f"Removing kubernetes pod {jobname} since it got canceled.")
+            print(f"Removing canceled pod {jobname}.")
             delete_pod(kube, jobname)
 
         elif db_states[jobname] != kube_states[jobname]:
@@ -140,12 +140,12 @@ def process_active(db: DbConnection, kube: KubeClient) -> None:
             else:
                 update_job_state(db, jobname, kube_states[jobname], finished=True)
 
-    # TODO re-enable cleanup of finished pods.
-    # # Remove finished kubernetes pods.
-    # for jobname, state in kube_states.items():
-    #     if state not in ("QUEUING", "RUNNING"):
-    #         print(f"Removing kubernetes pod {jobname} with state {state}.")
-    #         delete_pod(kube, jobname)
+    # Remove successful pods, others will get garbage collected by kubernetes eventually.
+    # https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-garbage-collection
+    for jobname, state in kube_states.items():
+        if state == "SUCCEEDED":
+            print(f"Removing successful pod {jobname}.")
+            delete_pod(kube, jobname)
 
 
 # ======================================================================================
@@ -161,13 +161,15 @@ def delete_pod(kube: KubeClient, jobname: str) -> None:
 def process_new(db: DbConnection, kube: KubeClient) -> None:
     # Get all new jobs from database.
     with db.cursor() as cur:
-        cur.execute("""SELECT name, spec FROM jobs WHERE jobs.state='NEW'""")
+        cur.execute(
+            """SELECT name, spec, annotations FROM jobs WHERE jobs.state='NEW'"""
+        )
         rows = cur.fetchall()
 
     # Create corresponding kubernetes pods.
     for row in rows:
-        jobname, jobspec = row
-        create_pod(kube=kube, jobname=jobname, jobspec=jobspec)
+        jobname, jobspec, annotations = row
+        create_pod(kube=kube, jobname=jobname, jobspec=jobspec, annotations=annotations)
         update_job_state(db, jobname=row[0], state="QUEUING")
 
 
@@ -188,7 +190,7 @@ def update_job_state(
         with db.cursor() as cur:
             cur.execute("UPDATE jobs SET finished=%s WHERE name=%s", (now, jobname))
 
-    print(f"Updating status of database job {jobname} to {state}.")
+    print(f"Updating status of job {jobname} to {state}.")
     with db.cursor() as cur:
         cur.execute("UPDATE jobs SET state=%s WHERE name=%s", (state, jobname))
 
@@ -198,6 +200,7 @@ def create_pod(
     kube: KubeClient,
     jobname: str,
     jobspec: Dict[str, Any],
+    annotations: Dict[str, str],
 ) -> None:
     print(f"Creating pod for target: {jobspec["target_name"]}.")
 
@@ -319,7 +322,9 @@ def create_pod(
     )
 
     # metadata
-    metadata = V1ObjectMeta(name=jobname, labels={"cp2kci": "run"})
+    metadata = V1ObjectMeta(
+        name=jobname, labels={"cp2kci": "run"}, annotations=annotations
+    )
 
     kube.create_namespaced_pod(  # type: ignore
         namespace=K8S_NAMESPACE,

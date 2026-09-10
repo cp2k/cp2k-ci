@@ -489,14 +489,18 @@ def submit_check_run(
         gh.post_check_run(check_run)
         return
 
-    # Wait for mergeability check.
-    merge_sha = await_mergeability(gh, pr, check_run["name"], check_run["external_id"])
-    assert merge_sha
-
     # Delete old jobs - in case there are any.
     for job in list_check_run_jobs(target.name, pr):
         print(f"Canceling old job {job.name}.")
         jobsutil.cancel_job(job)
+
+    # Wait for mergeability check.
+    merge_sha = await_mergeability(gh, pr, check_run["name"], check_run["external_id"])
+    if not merge_sha:
+        check_run["conclusion"] = "failure"
+        check_run["output"] = {"title": "Branch not mergeable.", "summary": ""}
+        gh.post_check_run(check_run)
+        return
 
     # Let's submit the new job.
     check_run = gh.post_check_run(check_run)
@@ -697,7 +701,8 @@ def record_job_start_time(job: Job) -> None:
 
 # ======================================================================================
 def publish_job_to_dashboard(job: Job) -> None:
-    if job.is_active:
+    # if job.is_active:
+    if job.state != "SUCCEEDED":  # TODO also publish other states
         return
 
     if "cp2kci-dashboard-published" in job.annotations:
@@ -755,11 +760,15 @@ def publish_job_to_github(job: Job) -> None:
     report_blob = output_bucket.blob(job.annotations["cp2kci-report-path"])
     check_run: CheckRun = {"status": status, "output": {}}
     if status == "completed":
-        report = parse_report(report_blob)
-        check_run["conclusion"] = "success" if report.status == "OK" else "failure"
+        if job.state == "SUCCEEDED":
+            report = parse_report(report_blob)
+            check_run["conclusion"] = "success" if report.status == "OK" else "failure"
+            check_run["output"]["title"] = report.summary
+        else:
+            check_run["conclusion"] = "failure"
+            check_run["output"]["title"] = f"Job State: {job.state}"
         check_run["completed_at"] = gh.now()
         check_run["actions"] = build_restart_actions()
-        check_run["output"]["title"] = report.summary
         summary = f"[Detailed Report]({report_blob.public_url})"
         # Did the run upload artifacts?
         artifacts_path = job.annotations["cp2kci-artifacts-path"]
@@ -804,7 +813,7 @@ def parse_report(report_blob: Any) -> Report:
         assert report.git_sha and len(report.git_sha) == 40
     except:
         report.summary = "Error while retrieving report."
-        print(traceback.format_exc())
+        # print(traceback.format_exc())
 
     return report
 

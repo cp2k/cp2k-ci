@@ -10,21 +10,8 @@ from target import Target, TargetName
 
 import psycopg2
 
-import kubernetes.config
-import kubernetes.client
-from kubernetes.client.models.v1_resource_requirements import V1ResourceRequirements
-from kubernetes.client.models.v1_affinity import V1Affinity
-from kubernetes.client.models.v1_job import V1Job
-from kubernetes.client.models.v1_job_list import V1JobList
-
 import google.auth.transport.requests
 import google.auth.compute_engine
-
-# A Job deadline includes time spent waiting for a node. Keep the runtime limit
-# on the Pod so queued jobs receive their full execution budget, while retaining
-# a longer Job lifetime limit to bound queueing and retries.
-POD_RUNTIME_LIMIT_SECONDS = 3 * 60 * 60
-JOB_LIFETIME_LIMIT_SECONDS = 12 * 60 * 60
 
 # ======================================================================================
 JobAnnotations = TypedDict(
@@ -47,6 +34,33 @@ JobAnnotations = TypedDict(
         "cp2kci-pull-request-number": str,
         "cp2kci-pull-request-html-url": str,
         "cp2kci-dashboard-published": str,
+    },
+    total=False,
+)
+
+# ======================================================================================
+JobSpec = TypedDict(
+    "JobSpec",
+    {
+        "target_name": str,
+        "target_type": str,  # Literal["local", "remote", "cscs"],
+        "git_branch": str,
+        "git_ref": str,
+        "git_repo": str,
+        "report_upload_url": str,
+        "artifacts_upload_url": str,
+        "nodepools": List[str],
+        "arch": str,  # Literal["x86", "arm64"],
+        "cpu": float,
+        "gpu": int,
+        "use_cache": bool,
+        "cache_from": str,
+        "remote_host": str,
+        "remote_cmd": str,
+        "cscs_pipeline": str,
+        "dockerfile": str,
+        "build_path": str,
+        "build_args": str,
     },
     total=False,
 )
@@ -124,7 +138,7 @@ class JobsUtil:
     def patch_job_annotations(
         self, job: Job, partial_annotations: JobAnnotations
     ) -> None:
-        new_annotations = dict(job.annotations)  # copy
+        new_annotations: JobAnnotations = {**job.annotations}  # copy
         new_annotations.update(partial_annotations)
         new_annotations["cp2kci-updated"] = self.now()
 
@@ -178,7 +192,7 @@ class JobsUtil:
         report_blob.upload_from_string("Report not yet available.")
 
         # job spec
-        job_spec: Dict[str, Any] = {
+        job_spec: JobSpec = {
             "target_name": target.name,
             "target_type": target.runner,
             "git_branch": git_branch,

@@ -23,8 +23,9 @@ COPY requirements.txt .
 RUN pip3 install -r requirements.txt
 RUN pip3 freeze
 
-# Install Flask app.
-COPY frontend.py .
+# Install app.
+COPY templates ./templates/
+COPY frontend.py ./
 RUN mypy --strict frontend.py
 
 # For real-time logging.
