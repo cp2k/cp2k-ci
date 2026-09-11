@@ -93,8 +93,11 @@ def process_new(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) -> No
 def process_active(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) -> None:
     # Get status of all active jobs from database.
     with db.cursor() as cur:
-        cur.execute("""SELECT name, state FROM jobs
-            WHERE state IN ('NEW', 'QUEUING', 'RUNNING', 'CANCELING')""")
+        cur.execute(
+            """SELECT name, state FROM jobs
+            WHERE state IN ('QUEUING', 'RUNNING', 'CANCELING') AND worker=%s""",
+            (WORKER_NAME,),
+        )
         db_states: Dict[str, str] = {row[0]: row[1] for row in cur.fetchall()}
 
     # Get all relevant pods from kubernetes.

@@ -16,8 +16,10 @@ from typing import Any, AsyncGenerator
 import jinja2
 import psycopg
 from psycopg.rows import dict_row
+
 import aiohttp
 from aiohttp import web
+from aiohttp.typedefs import Handler
 
 import google.auth
 import google.cloud.pubsub  # type: ignore
@@ -31,7 +33,8 @@ project: str = google.auth.default()[1] or ""
 pubsub_topic = "projects/" + project + "/topics/cp2kci-topic"
 
 GITHUB_WEBHOOK_SECRET = web.AppKey("github_webhook_secret", str)
-DB_CONNECTION_KEY = web.AppKey("db_connection", psycopg.Connection)
+CP2KCI_WORKER_SECRET = web.AppKey("cp2kci_worker_secret", str)
+DB_CONNECTION = web.AppKey("db_connection", psycopg.Connection)
 
 
 # ======================================================================================
@@ -40,17 +43,23 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8888)
     args = parser.parse_args()
 
-    app = web.Application()
+    app = web.Application(middlewares=[auth_middleware])
     app[GITHUB_WEBHOOK_SECRET] = os.environ["GITHUB_WEBHOOK_SECRET"]
+    app[CP2KCI_WORKER_SECRET] = os.environ["CP2KCI_WORKER_SECRET"]
     app.cleanup_ctx.append(postgres_ctx)
 
-    # Setup routes.
+    # Setup public routes.
     app.router.add_get("/favicon.ico", handle_favicon)
     app.router.add_get("/robots.txt", handle_robots_txt)
     app.router.add_get("/health", handle_health)
-    app.router.add_get("/jobs", handle_jobs)
+    app.router.add_get("/jobs", handle_jobs_dashboard)
     app.router.add_post("/github_app_webhook", handle_github_app_webhook)
     app.router.add_get("/artifacts/{archive:([^/]+)}/{path:(.*)}", handle_artifacts)
+
+    # Setup API routes.
+    app.router.add_post("/api/jobs", handle_api_post_job)
+    app.router.add_get("/api/jobs/{name:(.*)}", handle_api_get_job)
+    app.router.add_patch("/api/jobs/{name:(.*)}", handle_api_patch_job)
 
     # Start listening for requests.
     print("CP2K-CI frontend is up and running :-)")
@@ -60,9 +69,26 @@ def main() -> None:
 # ======================================================================================
 async def postgres_ctx(app: web.Application) -> AsyncGenerator[None, None]:
     print("Opening postgresql connection...")
-    app[DB_CONNECTION_KEY] = psycopg.connect(autocommit=True)  # uses psql env variables
+    app[DB_CONNECTION] = psycopg.connect(autocommit=True)  # uses psql env variables
     yield
-    app[DB_CONNECTION_KEY].close()
+    app[DB_CONNECTION].close()
+
+
+# ======================================================================================
+@web.middleware
+async def auth_middleware(request: web.Request, handler: Handler) -> web.StreamResponse:
+    # Non-api paths can be accessed without authentication.
+    if not request.path.startswith("/api"):
+        return await handler(request)
+
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header == f"Bearer {request.app[CP2KCI_WORKER_SECRET]}":
+        request["worker_name"] = request.headers["X-Worker-Name"]
+        return await handler(request)
+
+    # Api key missing or invalid.
+    print(f"Access denied: {request.method} {request.path_qs}")
+    return web.Response(status=403)  # Forbidden
 
 
 # ======================================================================================
@@ -83,11 +109,11 @@ async def handle_health(request: web.Request) -> web.Response:
 
 
 # ======================================================================================
-async def handle_jobs(request: web.Request) -> web.Response:
+async def handle_jobs_dashboard(request: web.Request) -> web.Response:
     with open("templates/jobs.html.jinja") as f:
         tmpl = jinja2.Template(f.read())
 
-    with request.app[DB_CONNECTION_KEY].cursor(row_factory=dict_row) as cur:
+    with request.app[DB_CONNECTION].cursor(row_factory=dict_row) as cur:
         cur.execute(
             """SELECT * FROM jobs WHERE age(now(), created) < INTERVAL '24 hours'
             ORDER BY jobid DESC"""
@@ -180,6 +206,51 @@ def browse_zipfile(zip_file: ZipFile, path: str) -> web.Response:
     output += [f"</ul>"]
     output += ["</body></html>"]
     return web.Response(text="\n".join(output), content_type="text/html")
+
+
+# ======================================================================================
+async def handle_api_post_job(request: web.Request) -> web.Response:
+    # https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-ROWS
+    with request.app[DB_CONNECTION].cursor() as cur:
+        with request.app[DB_CONNECTION].transaction():
+            cur.execute("""SELECT name, spec FROM jobs
+                WHERE state='NEW' AND offloadable
+                ORDER BY jobid LIMIT 1 FOR UPDATE""")
+            row = cur.fetchone()
+            if row is None:
+                return web.Response(status=204)  # No Content
+            job_name, job_spec = row
+            cur.execute(
+                "UPDATE jobs SET state='QUEUING', worker=%s WHERE name=%s",
+                (request["worker_name"], job_name),
+            )
+            return web.json_response({"name": job_name, "spec": job_spec})
+
+
+# ======================================================================================
+async def handle_api_get_job(request: web.Request) -> web.Response:
+    job_name = request.match_info["name"]
+    with request.app[DB_CONNECTION].cursor() as cur:
+        cur.execute("SELECT state FROM jobs WHERE name=%s", (job_name,))
+        row = cur.fetchone()
+        if row is None:
+            return web.Response(status=404)  # No Found
+        return web.json_response({"name": job_name, "state": row[0]})
+
+
+# ======================================================================================
+async def handle_api_patch_job(request: web.Request) -> web.Response:
+    job_name = request.match_info["name"]
+    payload = await request.json()
+    with request.app[DB_CONNECTION].cursor() as cur:
+        cur.execute(
+            "UPDATE jobs SET state=%s WHERE name=%s AND worker=%s",
+            (payload["state"], job_name, request["worker_name"]),
+        )
+        if cur.rowcount > 0:
+            return web.Response(status=204)  # No Content
+        else:
+            return web.Response(status=404)  # No Found
 
 
 # ======================================================================================
