@@ -3,15 +3,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: cp2kci-kube-runner-deployment
+  name: cp2kci-kube-worker-deployment
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: cp2kci-kube-runner-app
+      app.kubernetes.io/name: cp2kci-kube-worker-app
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: cp2kci-kube-runner-app
+        app.kubernetes.io/name: cp2kci-kube-worker-app
     spec:
       terminationGracePeriodSeconds: 1
       # This is the kubernetes account, there is also a GCP backend account.
@@ -31,7 +31,7 @@ spec:
           - "--structured-logs"
           - "cp2k-org-project:us-central1:cp2k-ci-postgres"
       containers:
-      - image: "us-central1-docker.pkg.dev/cp2k-org-project/cp2kci/img_cp2kci_kube-runner:latest"
+      - image: "us-central1-docker.pkg.dev/cp2k-org-project/cp2kci/img_cp2kci_kube-worker:latest"
         name: main-container
         resources:
           requests:

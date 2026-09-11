@@ -23,14 +23,14 @@ COPY requirements.txt .
 RUN pip3 install -r requirements.txt
 RUN pip3 freeze
 
-# install kube runner
-COPY kube-runner.py ./
+# install kube worker
+COPY kube-worker.py ./
 
-RUN mypy --strict kube-runner.py
+RUN mypy --strict kube-worker.py
 
 # For real-time logging.
 ENV PYTHONUNBUFFERED=1
 
-CMD ["./kube-runner.py"]
+CMD ["./kube-worker.py"]
 
 #EOF
