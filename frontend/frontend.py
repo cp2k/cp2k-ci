@@ -16,6 +16,7 @@ from typing import Any, AsyncGenerator
 import jinja2
 import psycopg
 from psycopg.rows import dict_row
+import psycopg_pool
 
 import aiohttp
 from aiohttp import web
@@ -34,7 +35,7 @@ pubsub_topic = "projects/" + project + "/topics/cp2kci-topic"
 
 GITHUB_WEBHOOK_SECRET = web.AppKey("github_webhook_secret", str)
 CP2KCI_WORKER_SECRET = web.AppKey("cp2kci_worker_secret", str)
-DB_CONNECTION = web.AppKey("db_connection", psycopg.Connection)
+DB_CONNECTION_POOL = web.AppKey("db_connection_pool", psycopg_pool.ConnectionPool)
 
 
 # ======================================================================================
@@ -69,9 +70,10 @@ def main() -> None:
 # ======================================================================================
 async def postgres_ctx(app: web.Application) -> AsyncGenerator[None, None]:
     print("Opening postgresql connection...")
-    app[DB_CONNECTION] = psycopg.connect(autocommit=True)  # uses psql env variables
-    yield
-    app[DB_CONNECTION].close()
+    with psycopg_pool.ConnectionPool(min_size=1) as pool:  # uses psql env variables
+        pool.wait()
+        app[DB_CONNECTION_POOL] = pool
+        yield
 
 
 # ======================================================================================
@@ -113,12 +115,13 @@ async def handle_jobs_dashboard(request: web.Request) -> web.Response:
     with open("templates/jobs.html.jinja") as f:
         tmpl = jinja2.Template(f.read())
 
-    with request.app[DB_CONNECTION].cursor(row_factory=dict_row) as cur:
-        cur.execute(
-            """SELECT * FROM jobs WHERE age(now(), created) < INTERVAL '24 hours'
-            ORDER BY jobid DESC"""
-        )
-        jobs = cur.fetchall()
+    with request.app[DB_CONNECTION_POOL].connection() as db:
+        with db.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """SELECT * FROM jobs WHERE age(now(), created) < INTERVAL '24 hours'
+                ORDER BY jobid DESC"""
+            )
+            jobs = cur.fetchall()
 
     html = tmpl.render(jobs=jobs)
     return web.Response(text=html, content_type="text/html")
@@ -211,46 +214,52 @@ def browse_zipfile(zip_file: ZipFile, path: str) -> web.Response:
 # ======================================================================================
 async def handle_api_post_job(request: web.Request) -> web.Response:
     # https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-ROWS
-    with request.app[DB_CONNECTION].cursor() as cur:
-        with request.app[DB_CONNECTION].transaction():
-            cur.execute("""SELECT name, spec FROM jobs
-                WHERE state='NEW' AND offloadable
-                ORDER BY jobid LIMIT 1 FOR UPDATE""")
-            row = cur.fetchone()
-            if row is None:
-                return web.Response(status=204)  # No Content
-            job_name, job_spec = row
-            cur.execute(
-                "UPDATE jobs SET state='QUEUING', worker=%s WHERE name=%s",
-                (request["worker_name"], job_name),
-            )
-            return web.json_response({"name": job_name, "spec": job_spec})
+    with request.app[DB_CONNECTION_POOL].connection() as db:
+        with db.cursor() as cur:
+            with db.transaction():
+                cur.execute("""SELECT name, spec FROM jobs
+                    WHERE state='NEW' AND offloadable
+                    ORDER BY jobid LIMIT 1 FOR UPDATE""")
+                row = cur.fetchone()
+                if row is None:
+                    return web.Response(status=204)  # No Content
+                job_name, job_spec = row
+                cur.execute(
+                    "UPDATE jobs SET state='QUEUING', worker=%s WHERE name=%s",
+                    (request["worker_name"], job_name),
+                )
+                return web.json_response({"name": job_name, "spec": job_spec})
 
 
 # ======================================================================================
 async def handle_api_get_job(request: web.Request) -> web.Response:
     job_name = request.match_info["name"]
-    with request.app[DB_CONNECTION].cursor() as cur:
-        cur.execute("SELECT state FROM jobs WHERE name=%s", (job_name,))
-        row = cur.fetchone()
-        if row is None:
-            return web.Response(status=404)  # No Found
-        return web.json_response({"name": job_name, "state": row[0]})
+    with request.app[DB_CONNECTION_POOL].connection() as db:
+        with db.cursor() as cur:
+            cur.execute("SELECT state FROM jobs WHERE name=%s", (job_name,))
+            row = cur.fetchone()
+            if row is None:
+                return web.Response(status=404)  # No Found
+            return web.json_response({"name": job_name, "state": row[0]})
 
 
 # ======================================================================================
 async def handle_api_patch_job(request: web.Request) -> web.Response:
     job_name = request.match_info["name"]
     payload = await request.json()
-    with request.app[DB_CONNECTION].cursor() as cur:
-        cur.execute(
-            "UPDATE jobs SET state=%s WHERE name=%s AND worker=%s",
-            (payload["state"], job_name, request["worker_name"]),
-        )
-        if cur.rowcount > 0:
-            return web.Response(status=204)  # No Content
-        else:
-            return web.Response(status=404)  # No Found
+    with request.app[DB_CONNECTION_POOL].connection() as db:
+        with db.cursor() as cur:
+            # TODO set started and finished timestamps.
+            # TODO protect against re-vival of completed jobs.
+
+            cur.execute(
+                "UPDATE jobs SET state=%s WHERE name=%s AND worker=%s",
+                (payload["state"], job_name, request["worker_name"]),
+            )
+            if cur.rowcount > 0:
+                return web.Response(status=204)  # No Content
+            else:
+                return web.Response(status=404)  # No Found
 
 
 # ======================================================================================
