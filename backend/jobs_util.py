@@ -8,8 +8,7 @@ from typing import Any, Dict, Optional, List, TypedDict
 
 from target import Target, TargetName
 
-import psycopg2
-
+import psycopg
 import google.auth.transport.requests
 import google.auth.compute_engine
 
@@ -81,12 +80,12 @@ class JobsUtil:
         self.output_bucket = output_bucket
 
         # https://docs.cloud.google.com/sql/docs/postgres/iam-logins#cloud-sql-auth-proxy
-        self.db = psycopg2.connect(
+        self.db = psycopg.connect(
             host="127.0.0.1",
             user="cp2kci-backend@cp2k-org-project.iam",
             dbname="cp2k-ci",
+            autocommit=True,
         )
-        self.db.autocommit = True
         print(f"Opened database connection: {self.db }")
 
     # ----------------------------------------------------------------------------------

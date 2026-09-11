@@ -11,11 +11,11 @@ import urllib.parse
 import mimetypes
 import fsspec  # type: ignore
 from zipfile import ZipFile
-from typing import Any
+from typing import Any, AsyncGenerator
 
 import jinja2
-import psycopg2
-import psycopg2.extras
+import psycopg
+from psycopg.rows import dict_row
 import aiohttp
 from aiohttp import web
 
@@ -31,6 +31,7 @@ project: str = google.auth.default()[1] or ""
 pubsub_topic = "projects/" + project + "/topics/cp2kci-topic"
 
 GITHUB_WEBHOOK_SECRET = web.AppKey("github_webhook_secret", str)
+DB_CONNECTION_KEY = web.AppKey("db_connection", psycopg.Connection)
 
 
 # ======================================================================================
@@ -41,6 +42,7 @@ def main() -> None:
 
     app = web.Application()
     app[GITHUB_WEBHOOK_SECRET] = os.environ["GITHUB_WEBHOOK_SECRET"]
+    app.cleanup_ctx.append(postgres_ctx)
 
     # Setup routes.
     app.router.add_get("/favicon.ico", handle_favicon)
@@ -53,6 +55,14 @@ def main() -> None:
     # Start listening for requests.
     print("CP2K-CI frontend is up and running :-)")
     web.run_app(app, port=args.port)
+
+
+# ======================================================================================
+async def postgres_ctx(app: web.Application) -> AsyncGenerator[None, None]:
+    print("Opening postgresql connection...")
+    app[DB_CONNECTION_KEY] = psycopg.connect(autocommit=True)  # uses psql env variables
+    yield
+    app[DB_CONNECTION_KEY].close()
 
 
 # ======================================================================================
@@ -77,9 +87,7 @@ async def handle_jobs(request: web.Request) -> web.Response:
     with open("templates/jobs.html.jinja") as f:
         tmpl = jinja2.Template(f.read())
 
-    db = psycopg2.connect()  # uses psql environment variables
-    db.autocommit = True
-    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+    with request.app[DB_CONNECTION_KEY].cursor(row_factory=dict_row) as cur:
         cur.execute(
             """SELECT * FROM jobs WHERE age(now(), created) < INTERVAL '24 hours'
             ORDER BY jobid DESC"""
@@ -87,8 +95,6 @@ async def handle_jobs(request: web.Request) -> web.Response:
         jobs = cur.fetchall()
 
     html = tmpl.render(jobs=jobs)
-    db.close()
-
     return web.Response(text=html, content_type="text/html")
 
 

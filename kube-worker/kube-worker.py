@@ -8,7 +8,7 @@ from time import sleep
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, List, Literal, TypedDict
 
-import psycopg2
+import psycopg
 
 import kubernetes.config
 import kubernetes.client
@@ -32,9 +32,7 @@ from kubernetes.client.models.v1_node_selector_requirement import (
     V1NodeSelectorRequirement,
 )
 
-DbConnection = psycopg2._psycopg.connection
-KubeClient = kubernetes.client.CoreV1Api
-
+WORKER_NAME = "GCP"
 K8S_NAMESPACE = "default"
 K8S_TIMEOUT = 3  # seconds
 CONTAINER_IMAGE_BASE = f"us-central1-docker.pkg.dev/cp2k-org-project/cp2kci"
@@ -50,12 +48,12 @@ def main() -> None:
     kube = kubernetes.client.CoreV1Api()
 
     # https://docs.cloud.google.com/sql/docs/postgres/iam-logins#cloud-sql-auth-proxy
-    db = psycopg2.connect(
+    db = psycopg.connect(
         host="127.0.0.1",
         user="cp2kci-backend@cp2k-org-project.iam",
         dbname="cp2k-ci",
+        autocommit=True,
     )
-    db.autocommit = True
     print(f"Opened database connection: {db}")
 
     print("Starting main loop.")
@@ -69,23 +67,30 @@ def main() -> None:
 
 
 # ======================================================================================
-def process_new(db: DbConnection, kube: KubeClient) -> None:
-    # Get all new jobs from database.
+def process_new(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) -> None:
     with db.cursor() as cur:
-        cur.execute(
-            """SELECT name, spec, annotations FROM jobs WHERE jobs.state='NEW'"""
-        )
-        rows = cur.fetchall()
-
-    # Create corresponding kubernetes pods.
-    for row in rows:
-        jobname, jobspec, annotations = row
-        create_pod(kube=kube, jobname=jobname, jobspec=jobspec, annotations=annotations)
-        update_job_state(db, jobname=row[0], state="QUEUING")
+        while True:
+            with db.transaction():
+                cur.execute(
+                    """SELECT name, spec, annotations FROM jobs WHERE state='NEW'
+                    AND (NOT offloadable OR (age(now(), created) > INTERVAL '15 seconds'))
+                    ORDER BY jobid LIMIT 1 FOR UPDATE"""
+                )
+                row = cur.fetchone()
+                if not row:
+                    break
+                jobname, jobspec, annotations = row
+                create_pod(
+                    kube=kube, jobname=jobname, jobspec=jobspec, annotations=annotations
+                )
+                cur.execute(
+                    "UPDATE jobs SET state='QUEUING', worker=%s WHERE name=%s",
+                    (WORKER_NAME, jobname),
+                )
 
 
 # ======================================================================================
-def process_active(db: DbConnection, kube: KubeClient) -> None:
+def process_active(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) -> None:
     # Get status of all active jobs from database.
     with db.cursor() as cur:
         cur.execute("""SELECT name, state FROM jobs
@@ -165,7 +170,7 @@ def process_active(db: DbConnection, kube: KubeClient) -> None:
 
 
 # ======================================================================================
-def delete_pod(kube: KubeClient, jobname: str) -> None:
+def delete_pod(kube: kubernetes.client.CoreV1Api, jobname: str) -> None:
     pod_list = kube.delete_namespaced_pod(  # type: ignore
         name=jobname,
         namespace=K8S_NAMESPACE,
@@ -175,13 +180,12 @@ def delete_pod(kube: KubeClient, jobname: str) -> None:
 
 # ======================================================================================
 def update_job_state(
-    db: DbConnection,
+    db: psycopg.Connection,
     jobname: str,
     state: str,
     started: Optional[bool] = False,
     finished: Optional[bool] = False,
 ) -> None:
-    pass
     now = datetime.now(timezone.utc)
     if started:
         with db.cursor() as cur:
@@ -197,7 +201,7 @@ def update_job_state(
 
 # ======================================================================================
 def create_pod(
-    kube: KubeClient,
+    kube: kubernetes.client.CoreV1Api,
     jobname: str,
     jobspec: Dict[str, Any],
     annotations: Dict[str, str],
