@@ -69,6 +69,22 @@ def main() -> None:
 
 
 # ======================================================================================
+def process_new(db: DbConnection, kube: KubeClient) -> None:
+    # Get all new jobs from database.
+    with db.cursor() as cur:
+        cur.execute(
+            """SELECT name, spec, annotations FROM jobs WHERE jobs.state='NEW'"""
+        )
+        rows = cur.fetchall()
+
+    # Create corresponding kubernetes pods.
+    for row in rows:
+        jobname, jobspec, annotations = row
+        create_pod(kube=kube, jobname=jobname, jobspec=jobspec, annotations=annotations)
+        update_job_state(db, jobname=row[0], state="QUEUING")
+
+
+# ======================================================================================
 def process_active(db: DbConnection, kube: KubeClient) -> None:
     # Get status of all active jobs from database.
     with db.cursor() as cur:
@@ -155,22 +171,6 @@ def delete_pod(kube: KubeClient, jobname: str) -> None:
         namespace=K8S_NAMESPACE,
         _request_timeout=K8S_TIMEOUT,
     )
-
-
-# ======================================================================================
-def process_new(db: DbConnection, kube: KubeClient) -> None:
-    # Get all new jobs from database.
-    with db.cursor() as cur:
-        cur.execute(
-            """SELECT name, spec, annotations FROM jobs WHERE jobs.state='NEW'"""
-        )
-        rows = cur.fetchall()
-
-    # Create corresponding kubernetes pods.
-    for row in rows:
-        jobname, jobspec, annotations = row
-        create_pod(kube=kube, jobname=jobname, jobspec=jobspec, annotations=annotations)
-        update_job_state(db, jobname=row[0], state="QUEUING")
 
 
 # ======================================================================================

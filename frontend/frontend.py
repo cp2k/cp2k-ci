@@ -80,9 +80,10 @@ async def handle_jobs(request: web.Request) -> web.Response:
     db = psycopg2.connect()  # uses psql environment variables
     db.autocommit = True
     with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        cur.execute("""SELECT name, state, spec, annotations, created, started, finished
-            FROM jobs WHERE age(now(), created) < INTERVAL '24 hours'
-            ORDER BY jobid DESC""")
+        cur.execute(
+            """SELECT * FROM jobs WHERE age(now(), created) < INTERVAL '24 hours'
+            ORDER BY jobid DESC"""
+        )
         jobs = cur.fetchall()
 
     html = tmpl.render(jobs=jobs)

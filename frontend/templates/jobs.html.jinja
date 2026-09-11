@@ -7,6 +7,8 @@
         <thead><tr>
             <th>name</th>
             <th>state</th>
+            <th>offloadable</th>
+            <th>worker</th>
             <th>created</th>
             <th>started</th>
             <th>finished</th>
@@ -21,6 +23,8 @@
                 </a>
             </td>
             <td>{{ job["state"] }}</td>
+            <td>{{ job["offloadable"] }}</td>
+            <td>{{ job["worker"] }}</td>
             <td>{{ job["created"].isoformat(sep=' ')[:16] }}</td>
             <td>{{ job["started"] and job["started"].isoformat(sep=' ')[:16] }}</td>
             <td>{{ job["finished"] and job["finished"].isoformat(sep=' ')[:16] }}</td>

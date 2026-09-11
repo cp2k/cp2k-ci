@@ -10,6 +10,7 @@ docker tag "${IMAGE_NAME}:${TIMESTAMP}" "${IMAGE_NAME}:latest"
 
 docker push "${IMAGE_NAME}:${TIMESTAMP}"
 docker push "${IMAGE_NAME}:latest"
+sleep 1  # wait for image to become visible
 
 gcloud run deploy cp2kci-frontend --platform=managed --region=us-central1 --image="${IMAGE_NAME}:${TIMESTAMP}"
 

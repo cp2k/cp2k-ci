@@ -220,11 +220,19 @@ class JobsUtil:
             job_spec["build_path"] = target.build_path
             job_spec["build_args"] = target.build_args + f" GIT_COMMIT_SHA={git_ref}"
 
+        offloadable = target.name == "cp2k-precommit"
+
         # insert into database
         with self.db.cursor() as curs:
             curs.execute(
-                "INSERT INTO jobs (name, spec, annotations) VALUES (%s, %s, %s)",
-                (job_name, json.dumps(job_spec), json.dumps(job_annotations)),
+                """INSERT INTO jobs (name, spec, annotations, offloadable)
+                    VALUES (%s, %s, %s, %s)""",
+                (
+                    job_name,
+                    json.dumps(job_spec),
+                    json.dumps(job_annotations),
+                    offloadable,
+                ),
             )
 
 

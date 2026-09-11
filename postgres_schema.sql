@@ -6,6 +6,8 @@ CREATE TABLE jobs (
     state job_state_enum NOT NULL DEFAULT 'NEW',
     spec JSONB NOT NULL,
     annotations JSONB NOT NULL,
+    offloadable BOOLEAN NOT NULL,
+    worker VARCHAR(100),
     created TIMESTAMPTZ NOT NULL DEFAULT now(),
     started TIMESTAMPTZ,
     finished TIMESTAMPTZ
