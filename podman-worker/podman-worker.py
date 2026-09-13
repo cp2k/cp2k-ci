@@ -130,7 +130,14 @@ def process(job: Job) -> None:
 def inner(job: Job) -> JobState:
     print(f"Writing report to: {job.report_path}")
 
-    job.log(f"StartDate: {now()}\n\n")
+    # TODO write worker id
+    # TODO write CPU id, e.g. platform.machine()
+    # https://github.com/cp2k/cp2k-ci/commit/05442adfddb0939a7f14292208da2c6ead3df457#commitcomment-200212912
+
+    # Remove old containers and images.
+    job.run(["buildah", "rm", "--all"]).wait()
+    job.run(["podman", "container", "prune", "-f", "--filter=until=12h"]).wait()
+    job.run(["podman", "image", "prune", "-a", "-f", "--filter=until=12h"]).wait()
 
     p = job.run(["git", "fetch", "origin", job.spec["git_branch"]])
     if p.wait() != 0:
@@ -162,8 +169,14 @@ def inner(job: Job) -> JobState:
     p = job.run(build_command, log=True)
     while p.poll() is None:
         if job.get_state() == "CANCELING":
-            p.kill()
-            p.wait()
+            try:
+                print("Send SIGTERM to podman.")
+                p.terminate()
+                p.wait(timeout=3)  # give buildah chance to release working containers
+            except subprocess.TimeoutExpired:
+                print("Podman did not exit in time, sending SIGKILL.")
+                p.kill()
+                p.wait()
             return "CANCELED"
         else:
             job.upload_report()
