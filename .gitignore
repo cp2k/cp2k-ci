@@ -5,4 +5,4 @@ ssh_config
 *~
 __pycache__
 \#*\#
-
+podman-worker/*.toml

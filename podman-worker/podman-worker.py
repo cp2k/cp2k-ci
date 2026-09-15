@@ -3,7 +3,10 @@
 # author: Ole Schuett
 
 import os
+import sys
+import atexit
 import socket
+import tomllib
 import argparse
 import subprocess
 from time import sleep
@@ -12,9 +15,6 @@ from datetime import datetime, timezone
 from typing import Dict, TypedDict, IO, List, Literal, Optional
 
 import requests
-
-WORKER_NAME = f"{socket.getfqdn()}:{os.getpid()}"
-WORKER_SECRET = os.environ["CP2KCI_WORKER_SECRET"]
 
 # ======================================================================================
 JobState = Literal[
@@ -27,6 +27,7 @@ JobState = Literal[
     "OUT_OF_MEMORY",
     "TIMEOUT",
     "PREEMPTED",
+    "CI_ERROR",
 ]
 
 
@@ -62,143 +63,218 @@ JobSpec = TypedDict(
 def main() -> None:
     # Parse command line arguments.
     parser = argparse.ArgumentParser(description="CP2K-CI Worker")
-    parser.add_argument("workdir", type=Path, help="Path to cp2k git repository")
+    parser.add_argument("config", type=Path)
     args = parser.parse_args()
-    assert (args.workdir / "make_cp2k.sh").exists()
 
-    print(f"Worker {WORKER_NAME} started in {args.workdir}...")
+    # Parse config file.
+    with open(args.config, "rb") as f:
+        config = tomllib.load(f)
+    workers: List[Worker] = []
+    for name, worker_config in config["workers"].items():
+        workdir = Path(worker_config["workdir"])
+        workers.append(Worker(name=name, workdir=workdir, secret=config["secret"]))
 
+    print(f"{len([w for w in workers if w.is_idle()])} / {len(workers)} workers idle")
+
+    # Main loop.
     while True:
-        r = api_request("POST", "/api/jobs")  # ask for new job
-        if r.status_code == 200:
-            payload = r.json()
-            job = Job(name=payload["name"], spec=payload["spec"], workdir=args.workdir)
-            process(job)
+        idle_workers = [w for w in workers if w.is_idle()]
+        if idle_workers:
+            r = idle_workers[0].api_request("POST", "/api/jobs")  # ask for new job
+            if r.status_code == 200:
+                payload = r.json()
+                job = Job(name=payload["name"], spec=payload["spec"])
+                idle_workers[0].run(job)
         sleep(5)
 
 
 # ======================================================================================
 class Job:
-    def __init__(self, name: str, spec: JobSpec, workdir: Path):
+    def __init__(self, name: str, spec: JobSpec):
         self.name = name
         self.spec = spec
-        self.workdir = workdir
-        self.report_path = self.workdir / "ci_report.log"  # ignored by precommit
-        self.report_fh = open(self.report_path, "wb")  # truncates
 
-    def upload_report(self) -> None:
+    # ----------------------------------------------------------------------------------
+    def upload_report(self, report_path: Path) -> None:
         content_type = "text/plain;charset=utf-8"
-        upload_file(self.report_path, self.spec["report_upload_url"], content_type)
+        self.upload_file(report_path, self.spec["report_upload_url"], content_type)
 
-    def log(self, text: str) -> None:
+    # ----------------------------------------------------------------------------------
+    def upload_file(self, local_file: Path, url: str, content_type: str) -> None:
+        headers = {"cache-control": "no-cache", "content-type": content_type}
+        requests.put(url, data=local_file.read_bytes(), headers=headers)
+
+
+# ======================================================================================
+class Worker:
+    def __init__(self, name: str, workdir: Path, secret: str):
+        self.name = name
+        self.workdir = workdir
+        self.secret = secret
+        assert (workdir / "cp2k" / "make_cp2k.sh").exists()
+        self.pid_path = self.workdir / "worker.pid"
+        self.report_path = self.workdir / "report.log"
+        self.report_fh: Optional[IO[bytes]] = None
+
+    # ----------------------------------------------------------------------------------
+    def is_idle(self) -> bool:
+        if not self.pid_path.exists():
+            return True
+        if check_pid(int(self.pid_path.read_text())):
+            return False  # process exists
+        print(f"Removing stale pid file: {self.pid_path}")
+        self.pid_path.unlink()
+        return True
+
+    # ----------------------------------------------------------------------------------
+    def run(self, job: Job) -> None:
+        # Fork
+        sys.stdout.flush()
+        sys.stderr.flush()
+        if os.fork() > 0:
+            return
+        os.setsid()
+        self.pid_path.write_text(str(os.getpid()))
+        atexit.register(lambda: self.pid_path.unlink())
+
+        # Run job
+        self.report_fh = open(self.report_path, "wb")  # truncates
+        self.set_job_state(job, "RUNNING")
+        self.report(f"StartDate: {now()}\n")
+        self.report(f"CpuId: 32x {cpu_id()}\n\n")
+        self.report(f"Worker: {self.name}\n")
+
+        end_state = self.inner_run(job)
+
+        self.report(f"\nEndDate: {now()}\n")
+        job.upload_report(self.report_path)
+        # TODO upload artifacts
+        self.set_job_state(job, end_state)
+        self.report_fh.close()
+
+        sys.exit(0)
+
+    # ----------------------------------------------------------------------------------
+    def inner_run(self, job: Job) -> JobState:
+        # Remove old containers and images.
+        # TODO run "buildah rm --all" for old images.
+        subprocess.run(["podman", "container", "prune", "-f", "--filter=until=12h"])
+        subprocess.run(["podman", "image", "prune", "-a", "-f", "--filter=until=12h"])
+
+        p = self.popen(["git", "fetch", "origin", job.spec["git_branch"]])
+        if p.wait() != 0:
+            return "CI_ERROR"
+
+        p = self.popen(
+            ["git", "-c", "advice.detachedHead=false", "checkout", job.spec["git_ref"]],
+            report=False,
+        )
+        if p.wait() != 0:
+            return "CI_ERROR"
+
+        git_log_format = "--pretty=%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: %an%nCommitSubject: %s%n"
+        p = self.popen(["git", "--no-pager", "log", "-1", git_log_format])
+        if p.wait() != 0:
+            return "CI_ERROR"
+
+        build_command = [
+            "podman",
+            "build",
+            "--tag=" + job.name,
+            # "--cpuset-cpus=" + cpuset,
+            "--memory=96g",
+            "--file=." + job.spec["dockerfile"],
+            "--shm-size=1g",
+        ]
+        for arg in job.spec["build_args"].strip().split():
+            build_command.append(f"--build-arg={arg}")
+        if not job.spec["use_cache"]:
+            build_command.append("--no-cache")
+        build_command.append("." + job.spec["build_path"])
+
+        p = self.popen(build_command)
+        while p.poll() is None:
+            if self.get_job_state(job) == "CANCELING":
+                try:
+                    print("Send SIGTERM to podman.")
+                    p.terminate()
+                    p.wait(
+                        timeout=3
+                    )  # give buildah chance to release working containers
+                except subprocess.TimeoutExpired:
+                    print("Podman did not exit in time, sending SIGKILL.")
+                    p.kill()
+                    p.wait()
+                return "CANCELED"
+            else:
+                job.upload_report(self.report_path)
+                print("Waiting for child process")
+                sleep(30)
+
+        if p.returncode == 137:
+            return "OUT_OF_MEMORY"
+        elif p.returncode != 0:
+            return "FAILED"
+
+        # docker run --init --cap-add=SYS_PTRACE --shm-size=1g \
+        #    --memory "${MEMORY_LIMIT_MB}m" \
+        #    --env "GIT_BRANCH=${GIT_BRANCH}" \
+        #    --env "GIT_REF=${GIT_REF}" \
+        #    --name "my_container" \
+
+        p = self.popen(["podman", "run", job.name])
+        if p.wait() != 0:
+            return "FAILED"
+
+        return "SUCCEEDED"
+
+    # ----------------------------------------------------------------------------------
+    def report(self, text: str) -> None:
+        assert self.report_fh
         self.report_fh.write(text.encode("utf8"))
         self.report_fh.flush()
 
-    def run(self, args: List[str], log: bool = False) -> subprocess.Popen[bytes]:
+    # ----------------------------------------------------------------------------------
+    def popen(self, args: List[str], report: bool = True) -> subprocess.Popen[bytes]:
         return subprocess.Popen(
             args,
-            cwd=self.workdir,
-            stdout=self.report_fh if log else None,
-            stderr=subprocess.STDOUT if log else None,
+            cwd=self.workdir / "cp2k",
+            stdout=self.report_fh if report else None,
+            stderr=subprocess.STDOUT if report else None,
         )
 
-    def get_state(self) -> JobState:
-        r = api_request("GET", f"/api/jobs/{self.name}")
+    # ----------------------------------------------------------------------------------
+    def get_job_state(self, job: Job) -> JobState:
+        r = self.api_request("GET", f"/api/jobs/{job.name}")
         state: JobState = r.json()["state"]
         return state
 
-    def set_state(self, state: JobState) -> None:
-        print(f"Setting state of {self.name} to {state}.")
-        api_request("PATCH", f"/api/jobs/{self.name}", json={"state": state})
+    # ----------------------------------------------------------------------------------
+    def set_job_state(self, job: Job, state: JobState) -> None:
+        print(f"Setting state of {job.name} to {state}.")
+        self.api_request("PATCH", f"/api/jobs/{job.name}", json={"state": state})
+
+    # ----------------------------------------------------------------------------------
+    def api_request(
+        self,
+        method: Literal["GET", "POST", "PATCH"],
+        path: str,
+        json: Optional[Dict[str, str]] = None,
+    ) -> requests.Response:
+        url = "https://ci.cp2k.org" + path
+        headers = {"Authorization": f"Bearer {self.secret}", "X-Worker-Name": self.name}
+        while True:
+            r = requests.request(method=method, url=url, headers=headers, json=json)
+            if r.status_code < 500:
+                return r
+            print(f"Got status {r.status_code} for {method} {path}")
+            sleep(10)  # retry
 
 
 # ======================================================================================
-def process(job: Job) -> None:
-    print(f"Writing report to: {job.report_path}")
-
-    job.set_state("RUNNING")
-    job.log(f"StartDate: {now()}\n\n")
-    end_state = inner(job)
-    job.log(f"\nEndDate: {now()}\n")
-    job.upload_report()
-    # TODO upload artifacts
-
-    job.set_state(end_state)
-
-
-# ======================================================================================
-def inner(job: Job) -> JobState:
-    print(f"Writing report to: {job.report_path}")
-
-    # TODO write worker id
-    # TODO write CPU id, e.g. platform.machine()
-    # https://github.com/cp2k/cp2k-ci/commit/05442adfddb0939a7f14292208da2c6ead3df457#commitcomment-200212912
-
-    # Remove old containers and images.
-    job.run(["buildah", "rm", "--all"]).wait()
-    job.run(["podman", "container", "prune", "-f", "--filter=until=12h"]).wait()
-    job.run(["podman", "image", "prune", "-a", "-f", "--filter=until=12h"]).wait()
-
-    p = job.run(["git", "fetch", "origin", job.spec["git_branch"]])
-    if p.wait() != 0:
-        return "FAILED"
-
-    p = job.run(["git", "checkout", job.spec["git_ref"]])
-    if p.wait() != 0:
-        return "FAILED"
-
-    git_log_format = "--pretty=%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: %an%nCommitSubject: %s%n"
-    p = job.run(["git", "--no-pager", "log", "-1", git_log_format], log=True)
-    if p.wait() != 0:
-        return "FAILED"
-
-    build_command = [
-        "podman",
-        "build",
-        "--tag=" + job.name,
-        # --memory=${MEMORY_LIMIT_MB}m" \
-        "--file=." + job.spec["dockerfile"],
-        "--shm-size=1g",
-    ]
-    for arg in job.spec["build_args"].strip().split():
-        build_command.append(f"--build-arg={arg}")
-    if not job.spec["use_cache"]:
-        build_command.append("--no-cache")
-    build_command.append("." + job.spec["build_path"])
-
-    p = job.run(build_command, log=True)
-    while p.poll() is None:
-        if job.get_state() == "CANCELING":
-            try:
-                print("Send SIGTERM to podman.")
-                p.terminate()
-                p.wait(timeout=3)  # give buildah chance to release working containers
-            except subprocess.TimeoutExpired:
-                print("Podman did not exit in time, sending SIGKILL.")
-                p.kill()
-                p.wait()
-            return "CANCELED"
-        else:
-            job.upload_report()
-            print("Waiting for child process")
-            sleep(30)
-
-    if p.returncode == 137:
-        return "OUT_OF_MEMORY"
-    elif p.returncode != 0:
-        return "FAILED"
-
-    # docker run --init --cap-add=SYS_PTRACE --shm-size=1g \
-    #    --memory "${MEMORY_LIMIT_MB}m" \
-    #    --env "GIT_BRANCH=${GIT_BRANCH}" \
-    #    --env "GIT_REF=${GIT_REF}" \
-    #    --name "my_container" \
-
-    p = job.run(["podman", "run", job.name], log=True)
-    if p.wait() != 0:
-        return "FAILED"
-
-    return "SUCCEEDED"
+def cpu_id() -> str:
+    output = subprocess.run(["cpuid", "-1"], capture_output=True).stdout.decode("utf8")
+    return [line[13:] for line in output.split("\n") if "(synth)" in line][0]
 
 
 # ======================================================================================
@@ -207,31 +283,13 @@ def now() -> str:
 
 
 # ======================================================================================
-def upload_file(local_file: Path, url: str, content_type: str) -> None:
-    headers = {"cache-control": "no-cache", "content-type": content_type}
-    requests.put(url, data=local_file.read_bytes(), headers=headers)
-
-
-# ======================================================================================
-def api_request(
-    method: Literal["GET", "POST", "PATCH"],
-    path: str,
-    json: Optional[Dict[str, str]] = None,
-) -> requests.Response:
-
-    headers = {
-        "Authorization": f"Bearer {WORKER_SECRET}",
-        "X-Worker-Name": WORKER_NAME,
-    }
-    while True:
-        r = requests.request(
-            method=method, url="https://ci.cp2k.org" + path, headers=headers, json=json
-        )
-        if r.status_code < 500:
-            return r
-
-        print(f"Got status {r.status_code} for {method} {path}")
-        sleep(10)  # retry
+def check_pid(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except OSError as e:
+        return False
+    else:
+        return True
 
 
 # ======================================================================================

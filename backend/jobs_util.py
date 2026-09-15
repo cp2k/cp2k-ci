@@ -220,7 +220,9 @@ class JobsUtil:
             job_spec["build_args"] = target.build_args + f" GIT_COMMIT_SHA={git_ref}"
 
         offloadable = (
-            target.name == "cp2k-pdbg" and "cp2kci-check-run-url" in job_annotations
+            "pool-main" in target.nodepools
+            and "perf" not in target.name
+            and "cp2kci-check-run-url" in job_annotations
         )
 
         # insert into database

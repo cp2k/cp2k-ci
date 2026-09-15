@@ -216,7 +216,7 @@ async def handle_api_post_job(request: web.Request) -> web.Response:
     # https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-ROWS
     async with request.app[DB_CONNECTION_POOL].connection() as db:
         async with db.cursor() as cur:
-            with db.transaction():
+            async with db.transaction():
                 await cur.execute("""SELECT name, spec FROM jobs
                     WHERE state='NEW' AND offloadable
                     ORDER BY jobid LIMIT 1 FOR UPDATE""")

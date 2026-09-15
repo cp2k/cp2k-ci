@@ -318,7 +318,12 @@ def await_mergeability(
 ) -> Optional[CommitSha]:
     # https://developer.github.com/v3/git/#checking-mergeability-of-pull-requests
 
-    check_run: CheckRun
+    check_run: CheckRun = {
+        "name": check_run_name,
+        "external_id": check_run_external_id,
+        "head_sha": pr["head"]["sha"],
+        "started_at": gh.now(),
+    }
 
     for i in range(10):
         if pr.get("mergeable") == False:
@@ -337,12 +342,9 @@ def await_mergeability(
         # pr["mergeable"] is None or merge_commit is outdated.
         # This might take a while, tell the user and disable resubmit buttons.
         if i == 0:
-            check_run = {
-                "name": check_run_name,
-                "external_id": check_run_external_id,
-                "head_sha": pr["head"]["sha"],
-                "started_at": gh.now(),
-                "output": {"title": "Waiting for mergeability check", "summary": ""},
+            check_run["output"] = {
+                "title": "Waiting for mergeability check",
+                "summary": "",
             }
             gh.post_check_run(check_run)
 
