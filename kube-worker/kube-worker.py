@@ -147,7 +147,7 @@ def process_active(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) ->
                 update_job_state(db, jobname, "CANCELED", finished=True)
             else:
                 print(f"Found orphan job {jobname} in state {db_states[jobname]}.")
-                update_job_state(db, jobname, "FAILED", finished=True)
+                update_job_state(db, jobname, "CI_ERROR", finished=True)
 
         elif jobname not in db_states:
             continue  # Ignore leftover kubernetes jobs.
