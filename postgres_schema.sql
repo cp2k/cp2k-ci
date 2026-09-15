@@ -22,7 +22,8 @@ CREATE TABLE jobs (
     worker VARCHAR(100),
     created TIMESTAMPTZ NOT NULL DEFAULT now(),
     started TIMESTAMPTZ,
-    finished TIMESTAMPTZ
+    finished TIMESTAMPTZ,
+    updated TIMESTAMPTZ
 );
 
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO cloudsqlsuperuser;

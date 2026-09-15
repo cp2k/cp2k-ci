@@ -6,6 +6,7 @@ import os
 import sys
 import atexit
 import socket
+import shutil
 import tomllib
 import argparse
 import subprocess
@@ -74,11 +75,15 @@ def main() -> None:
         workdir = Path(worker_config["workdir"])
         workers.append(Worker(name=name, workdir=workdir, secret=config["secret"]))
 
-    print(f"{len([w for w in workers if w.is_idle()])} / {len(workers)} workers idle")
+    prev_num_idle_workers = -1
 
     # Main loop.
     while True:
         idle_workers = [w for w in workers if w.is_idle()]
+        if len(idle_workers) != prev_num_idle_workers:
+            print(f"{len(workers) - len(idle_workers)} / {len(workers)} workers busy")
+            prev_num_idle_workers = len(idle_workers)
+
         if idle_workers:
             r = idle_workers[0].api_request("POST", "/api/jobs")  # ask for new job
             if r.status_code == 200:
@@ -98,6 +103,10 @@ class Job:
     def upload_report(self, report_path: Path) -> None:
         content_type = "text/plain;charset=utf-8"
         self.upload_file(report_path, self.spec["report_upload_url"], content_type)
+
+    # ----------------------------------------------------------------------------------
+    def upload_artifacts(self, zip_file: Path) -> None:
+        self.upload_file(zip_file, self.spec["artifacts_upload_url"], "application/zip")
 
     # ----------------------------------------------------------------------------------
     def upload_file(self, local_file: Path, url: str, content_type: str) -> None:
@@ -141,17 +150,27 @@ class Worker:
         self.report_fh = open(self.report_path, "wb")  # truncates
         self.set_job_state(job, "RUNNING")
         self.report(f"StartDate: {now()}\n")
-        self.report(f"CpuId: 32x {cpu_id()}\n\n")
-        self.report(f"Worker: {self.name}\n")
+        self.report(f"CpuId: 32x {cpu_id()}\n")
+        self.report(f"Worker: {self.name}\n\n")
 
         end_state = self.inner_run(job)
 
+        # Upload artifacts.
+        artifacts_path = self.workdir / "artifacts"
+        shutil.rmtree(artifacts_path, ignore_errors=True)
+        p = subprocess.run(
+            ["podman", "cp", f"{job.name}-cont:/workspace/artifacts", f"{self.workdir}"]
+        )
+        if p.returncode == 0:
+            self.report(f"Uploading artifacts...\n")
+            shutil.make_archive(str(artifacts_path), "zip", artifacts_path)
+            job.upload_artifacts(artifacts_path.with_suffix(".zip"))
+
+        # Finish
         self.report(f"\nEndDate: {now()}\n")
         job.upload_report(self.report_path)
-        # TODO upload artifacts
         self.set_job_state(job, end_state)
         self.report_fh.close()
-
         sys.exit(0)
 
     # ----------------------------------------------------------------------------------
@@ -161,14 +180,11 @@ class Worker:
         subprocess.run(["podman", "container", "prune", "-f", "--filter=until=12h"])
         subprocess.run(["podman", "image", "prune", "-a", "-f", "--filter=until=12h"])
 
-        p = self.popen(["git", "fetch", "origin", job.spec["git_branch"]])
+        p = self.popen(["git", "fetch", "origin", job.spec["git_branch"]], report=False)
         if p.wait() != 0:
             return "CI_ERROR"
 
-        p = self.popen(
-            ["git", "-c", "advice.detachedHead=false", "checkout", job.spec["git_ref"]],
-            report=False,
-        )
+        p = self.popen(["git", "checkout", job.spec["git_ref"]], report=False)
         if p.wait() != 0:
             return "CI_ERROR"
 
@@ -177,14 +193,18 @@ class Worker:
         if p.wait() != 0:
             return "CI_ERROR"
 
+        resources = [
+            "--shm-size=1g",
+            "--memory=96g",
+            # "--cpuset-cpus=" + cpuset
+        ]
+
         build_command = [
             "podman",
             "build",
             "--tag=" + job.name,
-            # "--cpuset-cpus=" + cpuset,
-            "--memory=96g",
             "--file=." + job.spec["dockerfile"],
-            "--shm-size=1g",
+            *resources,
         ]
         for arg in job.spec["build_args"].strip().split():
             build_command.append(f"--build-arg={arg}")
@@ -194,6 +214,7 @@ class Worker:
 
         p = self.popen(build_command)
         while p.poll() is None:
+            self.pat_watchdog(job)
             if self.get_job_state(job) == "CANCELING":
                 try:
                     print("Send SIGTERM to podman.")
@@ -208,7 +229,7 @@ class Worker:
                 return "CANCELED"
             else:
                 job.upload_report(self.report_path)
-                print("Waiting for child process")
+                # print("Waiting for child process")
                 sleep(30)
 
         if p.returncode == 137:
@@ -216,13 +237,9 @@ class Worker:
         elif p.returncode != 0:
             return "FAILED"
 
-        # docker run --init --cap-add=SYS_PTRACE --shm-size=1g \
-        #    --memory "${MEMORY_LIMIT_MB}m" \
-        #    --env "GIT_BRANCH=${GIT_BRANCH}" \
-        #    --env "GIT_REF=${GIT_REF}" \
-        #    --name "my_container" \
-
-        p = self.popen(["podman", "run", job.name])
+        p = self.popen(
+            ["podman", "run", *resources, f"--name={job.name}-cont", job.name]
+        )
         if p.wait() != 0:
             return "FAILED"
 
@@ -239,9 +256,13 @@ class Worker:
         return subprocess.Popen(
             args,
             cwd=self.workdir / "cp2k",
-            stdout=self.report_fh if report else None,
-            stderr=subprocess.STDOUT if report else None,
+            stdout=self.report_fh if report else subprocess.DEVNULL,
+            stderr=subprocess.STDOUT,
         )
+
+    # ----------------------------------------------------------------------------------
+    def pat_watchdog(self, job: Job) -> None:
+        self.api_request("PATCH", f"/api/jobs/{job.name}", json={})
 
     # ----------------------------------------------------------------------------------
     def get_job_state(self, job: Job) -> JobState:

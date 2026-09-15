@@ -246,20 +246,37 @@ async def handle_api_get_job(request: web.Request) -> web.Response:
 # ======================================================================================
 async def handle_api_patch_job(request: web.Request) -> web.Response:
     job_name = request.match_info["name"]
-    payload = await request.json()
+    body = await request.json()
     async with request.app[DB_CONNECTION_POOL].connection() as db:
         async with db.cursor() as cur:
-            # TODO set started and finished timestamps.
-            # TODO protect against re-vival of completed jobs.
-
             await cur.execute(
-                "UPDATE jobs SET state=%s WHERE name=%s AND worker=%s",
-                (payload["state"], job_name, request["worker_name"]),
+                "SELECT state, started, finished FROM jobs WHERE name=%s AND worker=%s",
+                (job_name, request["worker_name"]),
             )
-            if cur.rowcount > 0:
-                return web.Response(status=204)  # No Content
-            else:
+            row = await cur.fetchone()
+            if row is None:
                 return web.Response(status=404)  # No Found
+            state, started, finished = row
+
+            if finished is None:  # only modify jobs that haven't finished yet
+                await cur.execute(
+                    "UPDATE jobs SET updated=now() WHERE name=%s", (job_name,)
+                )
+                if "state" in body:
+                    await cur.execute(
+                        "UPDATE jobs SET state=%s WHERE name=%s",
+                        (body["state"], job_name),
+                    )
+                    if body["state"] == "RUNNING" and started is None:
+                        await cur.execute(
+                            "UPDATE jobs SET started=now() WHERE name=%s", (job_name,)
+                        )
+                    if body["state"] not in ("NEW", "QUEUING", "RUNNING", "CANCELING"):
+                        await cur.execute(
+                            "UPDATE jobs SET finished=now() WHERE name=%s", (job_name,)
+                        )
+
+            return web.Response(status=204)  # No Content
 
 
 # ======================================================================================

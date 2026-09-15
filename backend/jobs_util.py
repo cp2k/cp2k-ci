@@ -128,10 +128,19 @@ class JobsUtil:
     # ----------------------------------------------------------------------------------
     def cancel_job(self, job: Job) -> None:
         if job.state in ("NEW", "QUEUING", "RUNNING"):
-            with self.db.cursor() as curs:
-                curs.execute(
+            with self.db.cursor() as cur:
+                cur.execute(
                     "UPDATE jobs SET state='CANCELING' WHERE name=%s", (job.name,)
                 )
+
+    # ----------------------------------------------------------------------------------
+    def watchdog(self) -> None:
+        with self.db.cursor() as cur:
+            cur.execute("""UPDATE jobs SET state='CI_ERROR' WHERE
+                    started IS NOT null AND finished IS null
+                    AND (age(now(), updated) > INTERVAL '5 minutes')""")
+            if cur.rowcount > 0:
+                print(f"Watchdog found {cur.rowcount} abandoned job.")
 
     # ----------------------------------------------------------------------------------
     def patch_job_annotations(
@@ -148,8 +157,8 @@ class JobsUtil:
             report_blob.patch()
 
         # update database
-        with self.db.cursor() as curs:
-            curs.execute(
+        with self.db.cursor() as cur:
+            cur.execute(
                 "UPDATE jobs SET annotations=%s WHERE name=%s",
                 (json.dumps(new_annotations), job.name),
             )
@@ -222,12 +231,13 @@ class JobsUtil:
         offloadable = (
             "pool-main" in target.nodepools
             and "perf" not in target.name
+            and "spack" not in target.name  # TODO setup spack build cache
             and "cp2kci-check-run-url" in job_annotations
         )
 
         # insert into database
-        with self.db.cursor() as curs:
-            curs.execute(
+        with self.db.cursor() as cur:
+            cur.execute(
                 """INSERT INTO jobs (name, spec, annotations, offloadable)
                     VALUES (%s, %s, %s, %s)""",
                 (

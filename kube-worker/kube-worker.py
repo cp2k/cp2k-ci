@@ -112,6 +112,7 @@ def process_active(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) ->
     for pod in pod_list.items:
         jobname = pod.metadata.name
         phase = pod.status.phase
+        pat_watchdog(db, jobname)
 
         # Translate pod phase to job status.
         if phase == "Pending":
@@ -182,6 +183,12 @@ def delete_pod(kube: kubernetes.client.CoreV1Api, jobname: str) -> None:
 
 
 # ======================================================================================
+def pat_watchdog(db: psycopg.Connection, jobname: str) -> None:
+    with db.cursor() as cur:
+        cur.execute("UPDATE jobs SET update=now() WHERE name=%s", (jobname,))
+
+
+# ======================================================================================
 def update_job_state(
     db: psycopg.Connection,
     jobname: str,
@@ -189,17 +196,13 @@ def update_job_state(
     started: Optional[bool] = False,
     finished: Optional[bool] = False,
 ) -> None:
-    now = datetime.now(timezone.utc)
-    if started:
-        with db.cursor() as cur:
-            cur.execute("UPDATE jobs SET started=%s WHERE name=%s", (now, jobname))
-    if finished:
-        with db.cursor() as cur:
-            cur.execute("UPDATE jobs SET finished=%s WHERE name=%s", (now, jobname))
-
-    print(f"Updating status of job {jobname} to {state}.")
     with db.cursor() as cur:
+        print(f"Updating status of job {jobname} to {state}.")
         cur.execute("UPDATE jobs SET state=%s WHERE name=%s", (state, jobname))
+        if started:
+            cur.execute("UPDATE jobs SET started=now() WHERE name=%s", (jobname,))
+        if finished:
+            cur.execute("UPDATE jobs SET finished=now() WHERE name=%s", (jobname,))
 
 
 # ======================================================================================
