@@ -185,7 +185,7 @@ def delete_pod(kube: kubernetes.client.CoreV1Api, jobname: str) -> None:
 # ======================================================================================
 def pat_watchdog(db: psycopg.Connection, jobname: str) -> None:
     with db.cursor() as cur:
-        cur.execute("UPDATE jobs SET update=now() WHERE name=%s", (jobname,))
+        cur.execute("UPDATE jobs SET updated=now() WHERE name=%s", (jobname,))
 
 
 # ======================================================================================

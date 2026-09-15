@@ -136,8 +136,8 @@ class JobsUtil:
     # ----------------------------------------------------------------------------------
     def watchdog(self) -> None:
         with self.db.cursor() as cur:
-            cur.execute("""UPDATE jobs SET state='CI_ERROR' WHERE
-                    started IS NOT null AND finished IS null
+            cur.execute("""UPDATE jobs SET state='CI_ERROR', finished=now() WHERE
+                    state != 'NEW' AND finished IS null
                     AND (age(now(), updated) > INTERVAL '5 minutes')""")
             if cur.rowcount > 0:
                 print(f"Watchdog found {cur.rowcount} abandoned job.")
