@@ -322,7 +322,12 @@ def await_mergeability(
 
     for i in range(10):
         if pr.get("mergeable") == False:
+            check_run["completed_at"] = gh.now()
+            check_run["conclusion"] = "failure"
+            check_run["output"] = {"title": "Branch not mergeable.", "summary": ""}
+            gh.post_check_run(check_run)
             return None  # not mergeable
+
         elif pr.get("mergeable") == True:
             # Check freshness of merge branch.
             merge_commit = gh.get_head_commit(f"pull/{pr['number']}/merge")
@@ -419,12 +424,12 @@ def check_git_history(gh: GithubUtil, pr: PullRequest, commits: List[Commit]) ->
         "completed_at": gh.now(),
     }
 
+    # Wait for mergeability check.
     merge_sha = await_mergeability(gh, pr, check_run["name"], check_run["external_id"])
-
     if not merge_sha:
-        check_run["conclusion"] = "failure"
-        check_run["output"] = {"title": "Branch not mergeable.", "summary": ""}
-    elif any([len(c["parents"]) != 1 for c in commits]):
+        return False
+
+    if any([len(c["parents"]) != 1 for c in commits]):
         check_run["conclusion"] = "failure"
         help_url = "https://github.com/cp2k/cp2k/wiki/CP2K-CI#git-history-contains-merge-commits"
         check_run["output"] = {
@@ -497,9 +502,6 @@ def submit_check_run(
     # Wait for mergeability check.
     merge_sha = await_mergeability(gh, pr, check_run["name"], check_run["external_id"])
     if not merge_sha:
-        check_run["conclusion"] = "failure"
-        check_run["output"] = {"title": "Branch not mergeable.", "summary": ""}
-        gh.post_check_run(check_run)
         return
 
     # Let's submit the new job.
