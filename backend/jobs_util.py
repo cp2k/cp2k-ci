@@ -231,7 +231,6 @@ class JobsUtil:
         offloadable = (
             "pool-main" in target.nodepools
             and "perf" not in target.name
-            and "spack" not in target.name  # TODO setup spack build cache
             and "cp2kci-check-run-url" in job_annotations
         )
 

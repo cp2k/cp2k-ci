@@ -149,26 +149,17 @@ class Worker:
         self.pid_path.write_text(str(os.getpid()))
         atexit.register(lambda: self.pid_path.unlink())
 
-        # Run job
+        # Preamble
         self.report_fh = open(self.report_path, "wb")  # truncates
         self.set_job_state(job, "RUNNING")
         self.report(f"StartDate: {now()}\n")
         self.report(f"Worker: {self.name}\n")
         self.report(f"Memory: {self.memory}\n")
-        self.report(f"CpuId: {self.num_cpus}x {cpu_id()}\n\n")
+        self.report(f"CpuId: {self.num_cpus}x {cpu_id()}\n")
+        self.report(f"SpackCache: {spack_cache_status()}\n")
 
+        # Run job
         end_state = self.inner_run(job)
-
-        # Upload artifacts.
-        artifacts_path = self.workdir / "artifacts"
-        shutil.rmtree(artifacts_path, ignore_errors=True)
-        p = subprocess.run(
-            ["podman", "cp", f"{job.name}-cont:/workspace/artifacts", f"{self.workdir}"]
-        )
-        if p.returncode == 0:
-            self.report(f"Uploading artifacts...\n")
-            shutil.make_archive(str(artifacts_path), "zip", artifacts_path)
-            job.upload_artifacts(artifacts_path.with_suffix(".zip"))
 
         # Finish
         self.report(f"\nEndDate: {now()}\n")
@@ -184,14 +175,17 @@ class Worker:
         subprocess.run(["podman", "container", "prune", "-f", "--filter=until=12h"])
         subprocess.run(["podman", "image", "prune", "-a", "-f", "--filter=until=12h"])
 
+        # Fetch git branch.
         p = self.popen(["git", "fetch", "origin", job.spec["git_branch"]], report=False)
         if p.wait() != 0:
             return "CI_ERROR"
 
+        # Checkout git commit.
         p = self.popen(["git", "checkout", job.spec["git_ref"]], report=False)
         if p.wait() != 0:
             return "CI_ERROR"
 
+        # Report git commit metadata.
         git_log_format = "--pretty=%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: %an%nCommitSubject: %s%n"
         p = self.popen(["git", "--no-pager", "log", "-1", git_log_format])
         if p.wait() != 0:
@@ -216,6 +210,7 @@ class Worker:
             build_command.append("--no-cache")
         build_command.append("." + job.spec["build_path"])
 
+        # Build container.
         p = self.popen(build_command)
         while p.poll() is None:
             self.pat_watchdog(job)
@@ -241,11 +236,22 @@ class Worker:
         elif p.returncode != 0:
             return "FAILED"
 
-        p = self.popen(
-            ["podman", "run", *resources, f"--name={job.name}-cont", job.name]
-        )
+        # Run container.
+        p = self.popen(["podman", "run", *resources, f"--name={job.name}", job.name])
         if p.wait() != 0:
             return "FAILED"
+
+        # Upload artifacts.
+        artifacts_path = self.workdir / "artifacts"
+        shutil.rmtree(artifacts_path, ignore_errors=True)
+        p = self.popen(
+            ["podman", "cp", f"{job.name}:/workspace/artifacts", f"{self.workdir}"],
+            report=False,
+        )
+        if p.wait() == 0:
+            self.report(f"Uploading artifacts...\n")
+            shutil.make_archive(str(artifacts_path), "zip", artifacts_path)
+            job.upload_artifacts(artifacts_path.with_suffix(".zip"))
 
         return "SUCCEEDED"
 
@@ -322,6 +328,16 @@ def check_pid(pid: int) -> bool:
         return False
     else:
         return True
+
+
+# ======================================================================================
+def spack_cache_status() -> str:
+    spack_cache_url = "http://host.containers.internal:9000/spack-cache"
+    p = subprocess.run(
+        ["podman", "run", "alpine/curl", "-s", spack_cache_url],
+        stdout=subprocess.DEVNULL,
+    )
+    return "ready" if p.returncode == 0 else "not available"
 
 
 # ======================================================================================
