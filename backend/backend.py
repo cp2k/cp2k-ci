@@ -569,6 +569,7 @@ def cancel_check_runs(
             "actions": build_restart_actions(),
         }
         gh.patch_check_run(check_run)
+        jobsutil.patch_job_annotations(job, {"cp2kci-check-run-status": "completed"})
         jobsutil.cancel_job(job)
 
 
@@ -705,7 +706,6 @@ def record_job_start_time(job: Job) -> None:
 
 # ======================================================================================
 def publish_job_to_dashboard(job: Job) -> None:
-    # if job.is_active:
     if job.state != "SUCCEEDED":  # TODO also publish other states
         return
 

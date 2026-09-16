@@ -71,7 +71,7 @@ class Job:
         self.name = name
         self.state = state
         self.annotations = annotations
-        self.is_active = state in ("NEW", "QUEUING", "RUNNING", "CANCELING")
+        self.is_active = state in ("NEW", "QUEUING", "RUNNING")
 
 
 # ======================================================================================
