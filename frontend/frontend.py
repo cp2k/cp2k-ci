@@ -219,7 +219,7 @@ async def handle_api_post_job(request: web.Request) -> web.Response:
             async with db.transaction():
                 await cur.execute("""SELECT name, spec FROM jobs
                     WHERE state='NEW' AND offloadable
-                    ORDER BY jobid LIMIT 1 FOR UPDATE""")
+                    ORDER BY priority DESC, jobid LIMIT 1 FOR UPDATE""")
                 row = await cur.fetchone()
                 if row is None:
                     return web.Response(status=204)  # No Content

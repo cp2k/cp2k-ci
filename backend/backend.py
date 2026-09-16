@@ -525,7 +525,6 @@ def submit_check_run(
         git_ref=merge_sha,
         job_annotations=job_annotations,
         use_cache=use_cache,
-        # priority="high-priority",
     )
 
 

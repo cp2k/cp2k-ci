@@ -72,9 +72,11 @@ def process_new(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) -> No
         while True:
             with db.transaction():
                 cur.execute(
-                    """SELECT name, spec, annotations FROM jobs WHERE state='NEW'
-                    AND (NOT offloadable OR (age(now(), created) > INTERVAL '15 seconds'))
-                    ORDER BY jobid LIMIT 1 FOR UPDATE"""
+                    """SELECT name, spec, annotations FROM jobs WHERE state='NEW' AND
+                    (NOT offloadable
+                     OR (priority     AND (age(now(), created) > INTERVAL '5 minutes'))
+                     OR (NOT priority AND (age(now(), created) > INTERVAL '6 hours'))
+                    ) ORDER BY priority DESC, jobid LIMIT 1 FOR UPDATE"""
                 )
                 row = cur.fetchone()
                 if not row:

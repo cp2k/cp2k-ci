@@ -175,7 +175,6 @@ class JobsUtil:
         git_ref: str,
         job_annotations: JobAnnotations,
         use_cache: bool = True,
-        priority: Optional[str] = None,
     ) -> None:
         print(f"Submitting run for target: {target.name}.")
 
@@ -228,21 +227,19 @@ class JobsUtil:
             job_spec["build_path"] = target.build_path
             job_spec["build_args"] = target.build_args + f" GIT_COMMIT_SHA={git_ref}"
 
-        offloadable = (
-            "pool-main" in target.nodepools
-            and "perf" not in target.name
-            and "cp2kci-check-run-url" in job_annotations
-        )
+        priority = "cp2kci-check-run-url" in job_annotations
+        offloadable = "pool-main" in target.nodepools and "perf" not in target.name
 
         # insert into database
         with self.db.cursor() as cur:
             cur.execute(
-                """INSERT INTO jobs (name, spec, annotations, offloadable)
-                    VALUES (%s, %s, %s, %s)""",
+                """INSERT INTO jobs (name, spec, annotations, priority, offloadable)
+                    VALUES (%s, %s, %s, %s, %s)""",
                 (
                     job_name,
                     json.dumps(job_spec),
                     json.dumps(job_annotations),
+                    priority,
                     offloadable,
                 ),
             )
