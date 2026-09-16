@@ -119,7 +119,7 @@ async def handle_jobs_dashboard(request: web.Request) -> web.Response:
         async with db.cursor(row_factory=dict_row) as cur:
             await cur.execute("""SELECT * FROM jobs
                 WHERE finished IS null OR age(now(), created) < INTERVAL '24 hours'
-                ORDER BY updated DESC, created DESC""")
+                ORDER BY finished DESC, created DESC""")
             jobs = await cur.fetchall()
 
     html = tmpl.render(jobs=jobs)
