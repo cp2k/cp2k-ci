@@ -195,6 +195,7 @@ class Worker:
             "--shm-size=1g",
             f"--memory={self.memory}",
             f"--cpuset-cpus={self.cpuset}",
+            f"--env=PYTHON_CPU_COUNT={self.num_cpus}",
         ]
 
         build_command = [
