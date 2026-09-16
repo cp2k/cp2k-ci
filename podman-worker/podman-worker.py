@@ -3,6 +3,7 @@
 # author: Ole Schuett
 
 import os
+import re
 import sys
 import atexit
 import socket
@@ -72,8 +73,7 @@ def main() -> None:
         config = tomllib.load(f)
     workers: List[Worker] = []
     for name, worker_config in config["workers"].items():
-        workdir = Path(worker_config["workdir"])
-        workers.append(Worker(name=name, workdir=workdir, secret=config["secret"]))
+        workers.append(Worker(name=name, config=worker_config, secret=config["secret"]))
 
     prev_num_idle_workers = -1
 
@@ -116,11 +116,14 @@ class Job:
 
 # ======================================================================================
 class Worker:
-    def __init__(self, name: str, workdir: Path, secret: str):
+    def __init__(self, name: str, config: Dict[str, str], secret: str):
         self.name = name
-        self.workdir = workdir
         self.secret = secret
-        assert (workdir / "cp2k" / "make_cp2k.sh").exists()
+        self.memory = config["memory"]
+        self.cpuset = config["cpuset"]
+        self.num_cpus = cpuset_size(self.cpuset)
+        self.workdir = Path(config["workdir"])
+        assert (self.workdir / "cp2k" / "make_cp2k.sh").exists()
         self.pid_path = self.workdir / "worker.pid"
         self.report_path = self.workdir / "report.log"
         self.report_fh: Optional[IO[bytes]] = None
@@ -150,8 +153,9 @@ class Worker:
         self.report_fh = open(self.report_path, "wb")  # truncates
         self.set_job_state(job, "RUNNING")
         self.report(f"StartDate: {now()}\n")
-        self.report(f"CpuId: 32x {cpu_id()}\n")
-        self.report(f"Worker: {self.name}\n\n")
+        self.report(f"Worker: {self.name}\n")
+        self.report(f"Memory: {self.memory}\n")
+        self.report(f"CpuId: {self.num_cpus}x {cpu_id()}\n\n")
 
         end_state = self.inner_run(job)
 
@@ -195,8 +199,8 @@ class Worker:
 
         resources = [
             "--shm-size=1g",
-            "--memory=96g",
-            # "--cpuset-cpus=" + cpuset
+            f"--memory={self.memory}",
+            f"--cpuset-cpus={self.cpuset}",
         ]
 
         build_command = [
@@ -296,6 +300,13 @@ class Worker:
 def cpu_id() -> str:
     output = subprocess.run(["cpuid", "-1"], capture_output=True).stdout.decode("utf8")
     return [line[13:] for line in output.split("\n") if "(synth)" in line][0]
+
+
+# ======================================================================================
+def cpuset_size(cpuset: str) -> int:
+    match = re.match(r"(\d+)-(\d+)", cpuset)
+    assert match
+    return int(match.group(2)) - int(match.group(1)) + 1
 
 
 # ======================================================================================
