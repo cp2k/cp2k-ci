@@ -3,7 +3,6 @@
 # author: Ole Schuett
 
 import os
-import re
 import sys
 import atexit
 import socket
@@ -319,9 +318,12 @@ def cpu_id() -> str:
 
 # ======================================================================================
 def cpuset_size(cpuset: str) -> int:
-    match = re.match(r"(\d+)-(\d+)", cpuset)
-    assert match
-    return int(match.group(2)) - int(match.group(1)) + 1
+    p = subprocess.run(
+        ["podman", "run", f"--cpuset-cpus={cpuset}", "ubuntu:26.04", "nproc"],
+        check=True,
+        capture_output=True,
+    )
+    return int(p.stdout)
 
 
 # ======================================================================================
