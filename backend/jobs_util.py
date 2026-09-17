@@ -48,7 +48,7 @@ JobSpec = TypedDict(
         "git_repo": str,
         "report_upload_url": str,
         "artifacts_upload_url": str,
-        "nodepools": List[str],
+        "nodepool": str,
         "arch": str,  # Literal["x86", "arm64"],
         "cpu": float,
         "gpu": int,
@@ -216,7 +216,7 @@ class JobsUtil:
             "artifacts_upload_url": self.get_upload_url(
                 artifacts_path, content_type="application/zip"
             ),
-            "nodepools": target.nodepools,
+            "nodepool": target.nodepool,
             "arch": target.arch,
             "cpu": target.cpu,
             "gpu": target.gpu,
@@ -235,19 +235,20 @@ class JobsUtil:
             job_spec["build_args"] = target.build_args + f" GIT_COMMIT_SHA={git_ref}"
 
         priority = "cp2kci-check-run-url" in job_annotations
-        offloadable = "pool-main" in target.nodepools and "perf" not in target.name
+        offloadable = "perf" not in target.name
 
         # insert into database
         with self.db.cursor() as cur:
             cur.execute(
-                """INSERT INTO jobs (name, spec, annotations, priority, offloadable)
-                    VALUES (%s, %s, %s, %s, %s)""",
+                """INSERT INTO jobs (name, spec, annotations, priority, offloadable, nodepool)
+                    VALUES (%s, %s, %s, %s, %s, %s)""",
                 (
                     job_name,
                     json.dumps(job_spec),
                     json.dumps(job_annotations),
                     priority,
                     offloadable,
+                    target.nodepool,
                 ),
             )
 

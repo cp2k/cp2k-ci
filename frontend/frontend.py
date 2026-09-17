@@ -212,22 +212,29 @@ def browse_zipfile(zip_file: ZipFile, path: str) -> web.Response:
 
 # ======================================================================================
 async def handle_api_post_job(request: web.Request) -> web.Response:
+    body = await request.json()
+
     # https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-ROWS
     async with request.app[DB_CONNECTION_POOL].connection() as db:
         async with db.cursor() as cur:
-            async with db.transaction():
-                await cur.execute("""SELECT name, spec FROM jobs
-                    WHERE state='NEW' AND offloadable
-                    ORDER BY priority DESC, jobid LIMIT 1 FOR UPDATE""")
-                row = await cur.fetchone()
-                if row is None:
-                    return web.Response(status=204)  # No Content
-                job_name, job_spec = row
-                await cur.execute(
-                    "UPDATE jobs SET state='QUEUING', worker=%s WHERE name=%s",
-                    (request["worker_name"], job_name),
-                )
-                return web.json_response({"name": job_name, "spec": job_spec})
+            for nodepool in body["idle_nodepools"]:
+                async with db.transaction():
+                    await cur.execute(
+                        """SELECT name, spec FROM jobs
+                        WHERE state='NEW' AND offloadable AND nodepool=%s
+                        ORDER BY priority DESC, jobid LIMIT 1 FOR UPDATE""",
+                        (nodepool,),
+                    )
+                    row = await cur.fetchone()
+                    if row:
+                        job_name, job_spec = row
+                        await cur.execute(
+                            "UPDATE jobs SET state='QUEUING', worker=%s WHERE name=%s",
+                            (request["worker_name"], job_name),
+                        )
+                        return web.json_response({"name": job_name, "spec": job_spec})
+
+    return web.Response(status=204)  # No Content
 
 
 # ======================================================================================

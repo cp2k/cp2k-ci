@@ -20,6 +20,7 @@ CREATE TABLE jobs (
     annotations JSONB NOT NULL,
     priority BOOLEAN NOT NULL,
     offloadable BOOLEAN NOT NULL,
+    nodepool VARCHAR(100) NOT NULL,
     worker VARCHAR(100),
     created TIMESTAMPTZ NOT NULL DEFAULT now(),
     started TIMESTAMPTZ,

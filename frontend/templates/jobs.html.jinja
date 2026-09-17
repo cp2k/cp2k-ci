@@ -9,6 +9,7 @@
             <th>state</th>
             <th>priority</th>
             <th>offloadable</th>
+            <th>node pool</th>
             <th>worker</th>
             <th>created</th>
             <th>started</th>
@@ -27,6 +28,7 @@
             <td>{{ job["state"] }}</td>
             <td>{{ job["priority"] }}</td>
             <td>{{ job["offloadable"] }}</td>
+            <td>{{ job["nodepool"] }}</td>
             <td>{{ job["worker"] }}</td>
             <td>{{ job["created"].isoformat(sep=' ')[:16] }}</td>
             <td>{{ job["started"] and job["started"].isoformat(sep=' ')[:16] }}</td>

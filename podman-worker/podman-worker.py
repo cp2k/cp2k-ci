@@ -14,7 +14,7 @@ import subprocess
 from time import sleep
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Dict, TypedDict, IO, List, Literal, Optional
+from typing import Any, Dict, TypedDict, IO, List, Literal, Optional
 
 import requests
 
@@ -44,7 +44,7 @@ JobSpec = TypedDict(
         "git_repo": str,
         "report_upload_url": str,
         "artifacts_upload_url": str,
-        "nodepools": List[str],
+        "nodepool": str,
         "arch": str,  # Literal["x86", "arm64"],
         "cpu": float,
         "gpu": int,
@@ -84,8 +84,13 @@ def main() -> None:
             print(f"{len(workers) - len(idle_workers)} / {len(workers)} workers busy")
             prev_num_idle_workers = len(idle_workers)
 
-        if idle_workers:
-            r = idle_workers[0].api_request("POST", "/api/jobs")  # ask for new job
+        if idle_workers:  # ask for new job
+            # Use dict instead of set to preserve the order of nodepools
+            # to ensure that jobs for rare nodepools are allocated first.
+            idle_nodepools = {np: None for w in idle_workers for np in w.nodepools}
+            r = idle_workers[0].api_request(
+                "POST", "/api/jobs", json={"idle_nodepools": list(idle_nodepools)}
+            )
             if r.status_code == 200:
                 payload = r.json()
                 job = Job(name=payload["name"], spec=payload["spec"])
@@ -116,12 +121,13 @@ class Job:
 
 # ======================================================================================
 class Worker:
-    def __init__(self, name: str, config: Dict[str, str], secret: str):
-        self.name = name
-        self.secret = secret
-        self.memory = config["memory"]
-        self.cpuset = config["cpuset"]
+    def __init__(self, name: str, config: Dict[str, Any], secret: str):
+        self.name: str = name
+        self.secret: str = secret
+        self.memory: str = config["memory"]
+        self.cpuset: str = config["cpuset"]
         self.num_cpus = cpuset_size(self.cpuset)
+        self.nodepools: List[str] = config["nodepools"]
         self.workdir = Path(config["workdir"])
         assert (self.workdir / "cp2k" / "make_cp2k.sh").exists()
         self.pid_path = self.workdir / "worker.pid"
@@ -162,7 +168,9 @@ class Worker:
         end_state = self.inner_run(job)
 
         # Finish
-        self.report(f"\nEndDate: {now()}\n")
+        self.report("\n")
+        self.report(f"EndState: {end_state}\n")
+        self.report(f"EndDate: {now()}\n")
         job.upload_report(self.report_path)
         self.set_job_state(job, end_state)
         self.report_fh.close()
@@ -291,7 +299,7 @@ class Worker:
         self,
         method: Literal["GET", "POST", "PATCH"],
         path: str,
-        json: Optional[Dict[str, str]] = None,
+        json: Optional[Dict[str, Any]] = None,
     ) -> requests.Response:
         url = "https://ci.cp2k.org" + path
         headers = {"Authorization": f"Bearer {self.secret}", "X-Worker-Name": self.name}

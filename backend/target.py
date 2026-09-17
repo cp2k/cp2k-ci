@@ -28,8 +28,10 @@ class Target:
         # mandatory fields
         self.display_name = config.get(section, "display_name")
         self.cpu = config.getfloat(section, "cpu")
-        self.nodepools = config.get(section, "nodepools").split()
-
+        if config.has_option(section, "nodepool"):
+            self.nodepool = config.get(section, "nodepool")
+        else:  # backwards compatibility
+            self.nodepool = config.get(section, "nodepools").split()[0]
         # optional fields
         self.trigger_path = config.get(section, "trigger_path", fallback="")
         self.gpu = config.getint(section, "gpu", fallback=0)
