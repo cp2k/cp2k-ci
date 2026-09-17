@@ -114,7 +114,7 @@ def process_active(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) ->
     for pod in pod_list.items:
         jobname = pod.metadata.name
         phase = pod.status.phase
-        pat_watchdog(db, jobname)
+        send_heartbeat(db, jobname)
 
         # Translate pod phase to job status.
         if phase == "Pending":
@@ -185,9 +185,9 @@ def delete_pod(kube: kubernetes.client.CoreV1Api, jobname: str) -> None:
 
 
 # ======================================================================================
-def pat_watchdog(db: psycopg.Connection, jobname: str) -> None:
+def send_heartbeat(db: psycopg.Connection, jobname: str) -> None:
     with db.cursor() as cur:
-        cur.execute("UPDATE jobs SET updated=now() WHERE name=%s", (jobname,))
+        cur.execute("UPDATE jobs SET heartbeat=now() WHERE name=%s", (jobname,))
 
 
 # ======================================================================================

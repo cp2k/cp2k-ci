@@ -266,7 +266,7 @@ async def handle_api_patch_job(request: web.Request) -> web.Response:
 
             if finished is None:  # only modify jobs that haven't finished yet
                 await cur.execute(
-                    "UPDATE jobs SET updated=now() WHERE name=%s", (job_name,)
+                    "UPDATE jobs SET heartbeat=now() WHERE name=%s", (job_name,)
                 )
                 if "state" in body:
                     await cur.execute(

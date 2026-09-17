@@ -222,7 +222,7 @@ class Worker:
         # Build container.
         p = self.popen(build_command)
         while p.poll() is None:
-            self.pat_watchdog(job)
+            self.send_heartbeat(job)
             if self.get_job_state(job) == "CANCELING":
                 try:
                     print("Send SIGTERM to podman.")
@@ -280,7 +280,7 @@ class Worker:
         )
 
     # ----------------------------------------------------------------------------------
-    def pat_watchdog(self, job: Job) -> None:
+    def send_heartbeat(self, job: Job) -> None:
         self.api_request("PATCH", f"/api/jobs/{job.name}", json={})
 
     # ----------------------------------------------------------------------------------

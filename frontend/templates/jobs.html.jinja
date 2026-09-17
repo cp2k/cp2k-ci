@@ -11,10 +11,10 @@
             <th>offloadable</th>
             <th>node pool</th>
             <th>worker</th>
+            <th>heartbeat</th>
             <th>created</th>
             <th>started</th>
             <th>finished</th>
-            <th>updated</th>
             <th>pull request</th>
             <th>check run</th>
         </tr></thead>
@@ -30,10 +30,10 @@
             <td>{{ job["offloadable"] }}</td>
             <td>{{ job["nodepool"] }}</td>
             <td>{{ job["worker"] }}</td>
+            <td>{{ job["heartbeat"] and job["heartbeat"].isoformat(sep=' ')[:16] }}</td>
             <td>{{ job["created"].isoformat(sep=' ')[:16] }}</td>
             <td>{{ job["started"] and job["started"].isoformat(sep=' ')[:16] }}</td>
             <td>{{ job["finished"] and job["finished"].isoformat(sep=' ')[:16] }}</td>
-            <td>{{ job["updated"] and job["updated"].isoformat(sep=' ')[:16] }}</td>
             <td>
                 {% if "cp2kci-pull-request-number" in job["annotations"] %}
                     <a target="_blank" href="{{ job["annotations"]["cp2kci-pull-request-html-url"] }}">

@@ -25,7 +25,7 @@ CREATE TABLE jobs (
     created TIMESTAMPTZ NOT NULL DEFAULT now(),
     started TIMESTAMPTZ,
     finished TIMESTAMPTZ,
-    updated TIMESTAMPTZ
+    heartbeat TIMESTAMPTZ
 );
 
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO cloudsqlsuperuser;

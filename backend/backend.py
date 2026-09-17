@@ -134,7 +134,7 @@ def main() -> None:
 
 # ======================================================================================
 def tick(cycle: int) -> None:
-    jobsutil.watchdog()
+    jobsutil.check_all_job_healths()
     run_job_list = jobsutil.list_jobs()
     if cycle % 30 == 0:  # every 2.5 minutes
         poll_pull_requests(run_job_list)
