@@ -186,7 +186,7 @@ class JobsUtil:
         print(f"Submitting run for target: {target.name}.")
 
         short_uuid = str(uuid4())[:8]
-        job_name = f"run-{target.name}-{short_uuid}"
+        job_name = f"{target.name}-{short_uuid}"
         report_path = f"{job_name}_report.txt"
         artifacts_path = f"{job_name}_artifacts.zip"
         report_blob = self.output_bucket.blob(report_path)
@@ -235,7 +235,7 @@ class JobsUtil:
             job_spec["build_args"] = target.build_args + f" GIT_COMMIT_SHA={git_ref}"
 
         priority = "cp2kci-check-run-url" in job_annotations
-        offloadable = "perf" not in target.name
+        offloadable = target.nodepool in ("pool-main", "pool-perf")
 
         # insert into database
         with self.db.cursor() as cur:
