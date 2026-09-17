@@ -171,17 +171,17 @@ class Worker:
         self.report("\n")
         self.report(f"EndState: {end_state}\n")
         self.report(f"EndDate: {now()}\n")
+        self.report_fh.close()
         job.upload_report(self.report_path)
         self.set_job_state(job, end_state)
-        self.report_fh.close()
         sys.exit(0)
 
     # ----------------------------------------------------------------------------------
     def inner_run(self, job: Job) -> JobState:
         # Remove old containers and images.
         # TODO run "buildah rm --all" for old images.
-        subprocess.run(["podman", "container", "prune", "-f", "--filter=until=12h"])
-        subprocess.run(["podman", "image", "prune", "-a", "-f", "--filter=until=12h"])
+        subprocess.run(["podman", "container", "prune", "-f", "--filter=until=24h"])
+        subprocess.run(["podman", "image", "prune", "-a", "-f", "--filter=until=24h"])
 
         # Fetch git branch.
         p = self.popen(["git", "fetch", "origin", job.spec["git_branch"]], report=False)
