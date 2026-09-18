@@ -257,7 +257,7 @@ class Worker:
             report=False,
         )
         if p.wait() == 0:
-            self.report(f"Uploading artifacts...\n")
+            self.report(f"\nUploading artifacts...\n")
             shutil.make_archive(str(artifacts_path), "zip", artifacts_path)
             job.upload_artifacts(artifacts_path.with_suffix(".zip"))
 

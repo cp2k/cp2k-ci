@@ -71,11 +71,13 @@ def process_new(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) -> No
     with db.cursor() as cur:
         while True:
             with db.transaction():
+                # TODO find a smarter criterion that looks at the queue lenght.
                 cur.execute(
-                    """SELECT name, spec, annotations FROM jobs WHERE state='NEW' AND
-                    (NOT offloadable
-                     OR (priority     AND (age(now(), created) > INTERVAL '5 minutes'))
-                     OR (NOT priority AND (age(now(), created) > INTERVAL '6 hours'))
+                    """SELECT name, spec, annotations FROM jobs WHERE state='NEW'
+                    AND nodepool != 'pool-perf'
+                    AND (NOT offloadable
+                        OR (priority     AND (age(now(), created) > INTERVAL '30 minutes'))
+                        OR (NOT priority AND (age(now(), created) > INTERVAL '6 hours'))
                     ) ORDER BY priority DESC, jobid LIMIT 1 FOR UPDATE"""
                 )
                 row = cur.fetchone()
@@ -112,7 +114,7 @@ def process_active(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) ->
     # Get status of all kubernetes pods.
     kube_states: Dict[str, str] = {}
     for pod in pod_list.items:
-        jobname = pod.metadata.name
+        jobname = pod.metadata.annotations["cp2kci/jobname"]
         phase = pod.status.phase
         send_heartbeat(db, jobname)
 
@@ -178,7 +180,7 @@ def process_active(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) ->
 # ======================================================================================
 def delete_pod(kube: kubernetes.client.CoreV1Api, jobname: str) -> None:
     pod_list = kube.delete_namespaced_pod(  # type: ignore
-        name=jobname,
+        name=make_pod_name(jobname),
         namespace=K8S_NAMESPACE,
         _request_timeout=K8S_TIMEOUT,
     )
@@ -309,7 +311,7 @@ def create_pod(
     requirement = V1NodeSelectorRequirement(
         key="cloud.google.com/gke-nodepool",
         operator="In",
-        values=jobspec["nodepools"],
+        values=[jobspec["nodepool"]],
     )
     term = V1NodeSelectorTerm(match_expressions=[requirement])
     selector = V1NodeSelector([term])
@@ -335,7 +337,9 @@ def create_pod(
 
     # metadata
     metadata = V1ObjectMeta(
-        name=jobname, labels={"cp2kci": "run"}, annotations=annotations
+        name=make_pod_name(jobname),
+        labels={"cp2kci": "run"},
+        annotations={**annotations, "cp2kci/jobname": jobname},
     )
 
     kube.create_namespaced_pod(  # type: ignore
@@ -343,6 +347,11 @@ def create_pod(
         body=V1Pod(spec=pod_spec, metadata=metadata),
         _request_timeout=K8S_TIMEOUT,
     )
+
+
+# ======================================================================================
+def make_pod_name(jobname: str) -> str:
+    return f"run-{jobname}"
 
 
 # ======================================================================================

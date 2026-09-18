@@ -598,10 +598,10 @@ def submit_dashboard_test(target: Target, head_sha: str, force: bool = False) ->
             print(f"Found up-to-date dashboard report for: {target.name}.")
             return  # No need to submit another job.
 
-        if target.cache_from:
-            if get_dashboard_report_sha(target.cache_from) != head_sha:
-                print(f"Found stale cache_from dashboard report for: {target.name}.")
-                return  # Won't submit a job without up-to-date cache_from image.
+        # if target.cache_from:
+        #    if get_dashboard_report_sha(target.cache_from) != head_sha:
+        #        print(f"Found stale cache_from dashboard report for: {target.name}.")
+        #        return  # Won't submit a job without up-to-date cache_from image.
 
     # Finally submit a new job.
     job_annotations = JobAnnotations({"cp2kci-dashboard": "yes"})

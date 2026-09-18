@@ -230,7 +230,7 @@ class JobsUtil:
             job_spec["build_args"] = target.build_args + f" GIT_COMMIT_SHA={git_ref}"
 
         priority = "cp2kci-check-run-url" in job_annotations
-        offloadable = target.nodepool in ("pool-main", "pool-perf")
+        offloadable = target.nodepool in ("pool-main", "pool-perf", "pool-intel")
 
         # insert into database
         with self.db.cursor() as cur:
