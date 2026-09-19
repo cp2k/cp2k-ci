@@ -229,7 +229,7 @@ async def handle_api_post_job(request: web.Request) -> web.Response:
                     if row:
                         job_name, job_spec = row
                         await cur.execute(
-                            "UPDATE jobs SET state='QUEUING', worker=%s WHERE name=%s",
+                            "UPDATE jobs SET state='QUEUING', worker=%s, heartbeat=now() WHERE name=%s",
                             (request["worker_name"], job_name),
                         )
                         return web.json_response({"name": job_name, "spec": job_spec})

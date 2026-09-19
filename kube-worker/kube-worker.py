@@ -76,7 +76,7 @@ def process_new(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) -> No
                     """SELECT name, spec, annotations FROM jobs WHERE state='NEW'
                     AND nodepool != 'pool-perf'
                     AND (NOT offloadable
-                        OR (priority     AND (age(now(), created) > INTERVAL '30 minutes'))
+                        OR (priority     AND (age(now(), created) > INTERVAL '15 minutes'))
                         OR (NOT priority AND (age(now(), created) > INTERVAL '6 hours'))
                     ) ORDER BY priority DESC, jobid LIMIT 1 FOR UPDATE"""
                 )
@@ -88,7 +88,7 @@ def process_new(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) -> No
                     kube=kube, jobname=jobname, jobspec=jobspec, annotations=annotations
                 )
                 cur.execute(
-                    "UPDATE jobs SET state='QUEUING', worker=%s WHERE name=%s",
+                    "UPDATE jobs SET state='QUEUING', worker=%s, heartbeat=now() WHERE name=%s",
                     (WORKER_NAME, jobname),
                 )
 
@@ -158,7 +158,7 @@ def process_active(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) ->
             continue  # Ignore leftover kubernetes jobs.
 
         elif db_states[jobname] == "CANCELING":
-            print(f"Removing canceled pod {jobname}.")
+            print(f"Removing pod of canceled job {jobname}.")
             delete_pod(kube, jobname)
 
         elif db_states[jobname] != kube_states[jobname]:
@@ -173,7 +173,7 @@ def process_active(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) ->
     # https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-garbage-collection
     for jobname, state in kube_states.items():
         if state == "SUCCEEDED":
-            print(f"Removing successful pod {jobname}.")
+            print(f"Removing pod of successful job {jobname}.")
             delete_pod(kube, jobname)
 
 
