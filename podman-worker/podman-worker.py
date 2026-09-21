@@ -74,6 +74,7 @@ def main() -> None:
     for name, worker_config in config["workers"].items():
         workers.append(Worker(name=name, config=worker_config, secret=config["secret"]))
 
+    spack_cache_start()
     prev_num_idle_workers = -1
 
     # Main loop.
@@ -82,6 +83,12 @@ def main() -> None:
         if len(idle_workers) != prev_num_idle_workers:
             print(f"{len(workers) - len(idle_workers)} / {len(workers)} workers busy")
             prev_num_idle_workers = len(idle_workers)
+
+        # Remove old intermediate containers when all workers are idle.
+        if len(idle_workers) == len(workers):
+            subprocess.run(["buildah", "rm", "--all"])
+            for w in workers:
+                shutil.rmtree(w.tmpdir, ignore_errors=True)
 
         if idle_workers:  # ask for new job
             # Use dict instead of set to preserve the order of nodepools
@@ -94,6 +101,7 @@ def main() -> None:
                 payload = r.json()
                 job = Job(name=payload["name"], spec=payload["spec"])
                 idle_workers[0].run(job)
+
         sleep(5)
 
 
@@ -129,6 +137,7 @@ class Worker:
         self.nodepools: List[str] = config["nodepools"]
         self.workdir = Path(config["workdir"])
         assert (self.workdir / "cp2k" / "make_cp2k.sh").exists()
+        self.tmpdir = self.workdir / "tmp"
         self.pid_path = self.workdir / "worker.pid"
         self.report_path = self.workdir / "report.log"
         self.report_fh: Optional[IO[bytes]] = None
@@ -154,6 +163,13 @@ class Worker:
         self.pid_path.write_text(str(os.getpid()))
         atexit.register(lambda: self.pid_path.unlink())
 
+        # Ready environment
+        self.tmpdir.mkdir(exist_ok=True)
+        os.environ["TMPDIR"] = str(self.tmpdir)
+        spack_cache_remove_old_than(days=7)
+        subprocess.run(["podman", "container", "prune", "-f", "--filter=until=24h"])
+        subprocess.run(["podman", "image", "prune", "-a", "-f", "--filter=until=24h"])
+
         # Preamble
         self.report_fh = open(self.report_path, "wb")  # truncates
         self.set_job_state(job, "RUNNING")
@@ -161,7 +177,7 @@ class Worker:
         self.report(f"Worker: {self.name}\n")
         self.report(f"Memory: {self.memory}\n")
         self.report(f"CpuId: {self.num_cpus}x {cpu_id()}\n")
-        self.report(f"SpackCache: {spack_cache_status()}\n")
+        self.report(f"SpackCache: {"ready" if spack_cache_ready() else "n/a"}\n")
 
         # Run job
         end_state = self.inner_run(job)
@@ -177,11 +193,6 @@ class Worker:
 
     # ----------------------------------------------------------------------------------
     def inner_run(self, job: Job) -> JobState:
-        # Remove old containers and images.
-        # TODO run "buildah rm --all" for old images.
-        subprocess.run(["podman", "container", "prune", "-f", "--filter=until=24h"])
-        subprocess.run(["podman", "image", "prune", "-a", "-f", "--filter=until=24h"])
-
         # Fetch git branch.
         p = self.popen(["git", "fetch", "origin", job.spec["git_branch"]], report=False)
         if p.wait() != 0:
@@ -319,7 +330,7 @@ def cpu_id() -> str:
 # ======================================================================================
 def cpuset_size(cpuset: str) -> int:
     p = subprocess.run(
-        ["podman", "run", f"--cpuset-cpus={cpuset}", "ubuntu:26.04", "nproc"],
+        ["podman", "run", f"--cpuset-cpus={cpuset}", "docker.io/ubuntu:26.04", "nproc"],
         check=True,
         capture_output=True,
     )
@@ -342,13 +353,70 @@ def check_pid(pid: int) -> bool:
 
 
 # ======================================================================================
-def spack_cache_status() -> str:
+def spack_cache_ready() -> bool:
     spack_cache_url = "http://host.containers.internal:9000/spack-cache"
     p = subprocess.run(
-        ["podman", "run", "alpine/curl", "-s", spack_cache_url],
+        ["podman", "run", "docker.io/alpine/curl", "-s", spack_cache_url],
         stdout=subprocess.DEVNULL,
     )
-    return "ready" if p.returncode == 0 else "not available"
+    return p.returncode == 0
+
+
+# ======================================================================================
+def spack_cache_start() -> None:
+    if spack_cache_ready():
+        print("Found running spack-cache.")
+    elif subprocess.run(["podman", "start", "spack-cache"]).returncode == 0:
+        print("Re-started existing spack-cache.")
+    else:
+        print("Creating new spack-cache.")
+        subprocess.run(
+            [
+                "podman",
+                "run",
+                "--name=spack-cache",
+                "--detach",
+                "-p",
+                "9000:9000",
+                "quay.io/minio/minio",
+                "server",
+                "/data",
+            ],
+            check=True,
+        )
+        sleep(3)
+        subprocess.run(["podman", "container", "logs", "spack-cache"], check=True)
+
+        # Configure alias for localhost.
+        spack_cache_exec(
+            [
+                "mc",
+                "alias",
+                "set",
+                "local",
+                "http://localhost:9000",
+                "minioadmin",
+                "minioadmin",
+            ]
+        )
+
+        # Create bucket.
+        spack_cache_exec(["mc", "mb", "local/spack-cache"])
+
+        # Make bucket public.
+        spack_cache_exec(["mc", "anonymous", "set", "public", "local/spack-cache"])
+
+
+# ======================================================================================
+def spack_cache_remove_old_than(days: int) -> None:
+    spack_cache_exec(
+        ["mc", "rm", "-r", "--force", "--older-than={days}d", "local/spack-cache/"]
+    )
+
+
+# ======================================================================================
+def spack_cache_exec(args: List[str]) -> None:
+    subprocess.run(["podman", "exec", "spack-cache", *args], check=True)
 
 
 # ======================================================================================
