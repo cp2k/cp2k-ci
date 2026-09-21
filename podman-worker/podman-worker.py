@@ -86,6 +86,7 @@ def main() -> None:
 
         # Remove old intermediate containers when all workers are idle.
         if len(idle_workers) == len(workers):
+            print("Removing buildah containers...")
             subprocess.run(["buildah", "rm", "--all"])
             for w in workers:
                 shutil.rmtree(w.tmpdir, ignore_errors=True)
@@ -237,9 +238,7 @@ class Worker:
                 try:
                     print("Send SIGTERM to podman.")
                     p.terminate()
-                    p.wait(
-                        timeout=3
-                    )  # give buildah chance to release working containers
+                    p.wait(timeout=3)  # let buildah release working containers
                 except subprocess.TimeoutExpired:
                     print("Podman did not exit in time, sending SIGKILL.")
                     p.kill()
@@ -332,8 +331,8 @@ def cpuset_size(cpuset: str) -> int:
     p = subprocess.run(
         [
             "podman",
-            "run",
             "--transient-store",  # quick startup
+            "run",
             f"--cpuset-cpus={cpuset}",
             "docker.io/ubuntu:26.04",
             "nproc",
@@ -365,11 +364,13 @@ def spack_cache_ready() -> bool:
     p = subprocess.run(
         [
             "podman",
-            "run",
             "--transient-store",  # quick startup
-            "docker.io/alpine/curl",
-            "-s",
+            "run",
+            "docker.io/ubuntu:26.04",
+            "/usr/lib/apt/apt-helper",  # curl is not available in ubuntu base image
+            "download-file",
             spack_cache_url,
+            "/tmp/foo",
         ],
         stdout=subprocess.DEVNULL,
     )
