@@ -410,7 +410,7 @@ def spack_cache_start() -> None:
 # ======================================================================================
 def spack_cache_remove_old_than(days: int) -> None:
     spack_cache_exec(
-        ["mc", "rm", "-r", "--force", "--older-than={days}d", "local/spack-cache/"]
+        ["mc", "rm", "-r", "--force", f"--older-than={days}d", "local/spack-cache/"]
     )
 
 
