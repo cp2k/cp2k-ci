@@ -84,12 +84,11 @@ def main() -> None:
             print(f"{len(workers) - len(idle_workers)} / {len(workers)} workers busy")
             prev_num_idle_workers = len(idle_workers)
 
-        # Remove old intermediate containers when all workers are idle.
-        if len(idle_workers) == len(workers):
-            print("Removing buildah containers...")
-            subprocess.run(["buildah", "rm", "--all"])
-            for w in workers:
-                shutil.rmtree(w.tmpdir, ignore_errors=True)
+            # Remove old intermediate containers when all workers are idle.
+            if len(idle_workers) == len(workers):
+                subprocess.run(["buildah", "rm", "--all"])
+                for w in workers:
+                    shutil.rmtree(w.tmpdir, ignore_errors=True)
 
         if idle_workers:  # ask for new job
             # Use dict instead of set to preserve the order of nodepools
@@ -167,7 +166,7 @@ class Worker:
         # Ready environment
         self.tmpdir.mkdir(exist_ok=True)
         os.environ["TMPDIR"] = str(self.tmpdir)
-        spack_cache_remove_old_than(days=7)
+        spack_cache_remove_old_than(days=30)
         subprocess.run(["podman", "container", "prune", "-f", "--filter=until=24h"])
         subprocess.run(["podman", "image", "prune", "-a", "-f", "--filter=until=24h"])
 
@@ -420,6 +419,9 @@ def spack_cache_start() -> None:
 
         # Make bucket public.
         spack_cache_exec(["mc", "anonymous", "set", "public", "local/spack-cache"])
+
+    # Print bucket size.
+    spack_cache_exec(["mc", "du", "local/spack-cache/"])
 
 
 # ======================================================================================
