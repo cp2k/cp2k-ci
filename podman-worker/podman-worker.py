@@ -330,7 +330,14 @@ def cpu_id() -> str:
 # ======================================================================================
 def cpuset_size(cpuset: str) -> int:
     p = subprocess.run(
-        ["podman", "run", f"--cpuset-cpus={cpuset}", "docker.io/ubuntu:26.04", "nproc"],
+        [
+            "podman",
+            "run",
+            "--transient-store",  # quick startup
+            f"--cpuset-cpus={cpuset}",
+            "docker.io/ubuntu:26.04",
+            "nproc",
+        ],
         check=True,
         capture_output=True,
     )
@@ -356,7 +363,14 @@ def check_pid(pid: int) -> bool:
 def spack_cache_ready() -> bool:
     spack_cache_url = "http://host.containers.internal:9000/spack-cache"
     p = subprocess.run(
-        ["podman", "run", "docker.io/alpine/curl", "-s", spack_cache_url],
+        [
+            "podman",
+            "run",
+            "--transient-store",  # quick startup
+            "docker.io/alpine/curl",
+            "-s",
+            spack_cache_url,
+        ],
         stdout=subprocess.DEVNULL,
     )
     return p.returncode == 0
