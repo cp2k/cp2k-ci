@@ -171,7 +171,8 @@ class Worker:
         subprocess.run(["podman", "image", "prune", "-a", "-f", "--filter=until=24h"])
 
         # Preamble
-        self.report_fh = open(self.report_path, "wb")  # truncates
+        self.report_path.unlink(missing_ok=True)
+        self.report_fh = open(self.report_path, "wb")
         self.set_job_state(job, "RUNNING")
         self.report(f"StartDate: {now()}\n")
         self.report(f"Worker: {self.name}\n")
