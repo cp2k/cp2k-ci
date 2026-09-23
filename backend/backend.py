@@ -706,11 +706,14 @@ def record_job_start_time(job: Job) -> None:
 
 # ======================================================================================
 def publish_job_to_dashboard(job: Job) -> None:
-    if job.state != "SUCCEEDED":  # TODO also publish other states
-        return
+    if job.is_active:
+        return  # still running
+
+    if job.state in ("CANCELED", "PREEMPTED", "CI_ERROR"):
+        return  # report not useful
 
     if "cp2kci-dashboard-published" in job.annotations:
-        return
+        return  # already published
 
     target_name = job.annotations["cp2kci-target"]
     print(f"Publishing {target_name} to dashboard.")
@@ -750,6 +753,9 @@ def build_restart_actions() -> List[CheckRunAction]:
 
 # ======================================================================================
 def publish_job_to_github(job: Job) -> None:
+    if job.state == "CANCELING":
+        return  # wait until job is canceled
+
     status = "in_progress" if job.is_active else "completed"
 
     # failed jobs are handled by poll_pull_requests()
