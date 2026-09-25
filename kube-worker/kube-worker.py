@@ -325,7 +325,7 @@ def create_pod(
         containers=[container],
         volumes=volumes,
         tolerations=[tol_costly, tol_arch],
-        active_deadline_seconds=3 * 60 * 60,  # 3 hours
+        active_deadline_seconds=4 * 60 * 60,  # 4 hours
         termination_grace_period_seconds=0,
         restart_policy="OnFailure",  # https://github.com/kubernetes/kubernetes/issues/79398
         dns_policy="Default",  # bypass kube-dns
