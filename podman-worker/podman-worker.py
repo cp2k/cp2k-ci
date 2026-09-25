@@ -3,6 +3,7 @@
 # author: Ole Schuett
 
 import os
+import re
 import sys
 import atexit
 import socket
@@ -10,7 +11,7 @@ import shutil
 import tomllib
 import argparse
 import subprocess
-from time import sleep
+from time import sleep, time
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any, Dict, TypedDict, IO, List, Literal, Optional
@@ -139,7 +140,7 @@ class Worker:
         assert (self.workdir / "cp2k" / "make_cp2k.sh").exists()
         self.tmpdir = self.workdir / "tmp"
         self.pid_path = self.workdir / "worker.pid"
-        self.report_path = self.workdir / "report.log"
+        self.report_path = self.workdir / "ci_report.log"
         self.report_fh: Optional[IO[bytes]] = None
 
     # ----------------------------------------------------------------------------------
@@ -232,6 +233,7 @@ class Worker:
         build_command.append("." + job.spec["build_path"])
 
         # Build container.
+        build_start = time()
         p = self.popen(build_command)
         while p.poll() is None:
             self.send_heartbeat(job)
@@ -247,24 +249,47 @@ class Worker:
                 return "CANCELED"
             else:
                 job.upload_report(self.report_path)
-                # print("Waiting for child process")
-                sleep(30)
+                try:
+                    p.wait(timeout=30)
+                except subprocess.TimeoutExpired:
+                    pass
+        build_duration = time() - build_start
 
         if p.returncode == 137:
+            self.report("\nSummary: Container build ran out of memory.\n")
+            self.report("Status: FAILED\n")
             return "OUT_OF_MEMORY"
         elif p.returncode != 0:
+            self.report("\nSummary: Container build had non-zero exit status.\n")
+            self.report("Status: FAILED\n")
             return "FAILED"
 
-        # Run container.
-        p = self.popen(["podman", "run", *resources, f"--name={job.name}", job.name])
+        # Create container, so that we can copy files out.
+        container = f"{job.name}_cont"
+        p = self.popen(
+            ["podman", "create", f"--name={container}", job.name], report=False
+        )
         if p.wait() != 0:
-            return "FAILED"
+            return "CI_ERROR"
+
+        # Output report from container if build went really quick, ie. was fully cached.
+        if build_duration < 20:
+            container_report_path = self.workdir / "container_report.log"
+            p = self.popen(
+                ["podman", "cp", f"{container}:report.log", f"{container_report_path}"],
+                report=False,
+            )
+            if p.wait() == 0:
+                self.report("\nReplaying report from container:\n\n")
+                txt = container_report_path.read_text()
+                txt = re.sub(r"^(Summary:.*)$", r"\1 (cached)", txt, flags=re.MULTILINE)
+                self.report(txt)
 
         # Upload artifacts.
         artifacts_path = self.workdir / "artifacts"
         shutil.rmtree(artifacts_path, ignore_errors=True)
         p = self.popen(
-            ["podman", "cp", f"{job.name}:/workspace/artifacts", f"{self.workdir}"],
+            ["podman", "cp", f"{container}:/workspace/artifacts", f"{self.workdir}"],
             report=False,
         )
         if p.wait() == 0:
