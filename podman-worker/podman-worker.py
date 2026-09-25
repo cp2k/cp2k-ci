@@ -217,9 +217,9 @@ class Worker:
             f"--env=PYTHON_CPU_COUNT={self.num_cpus}",
         ]
 
+        podman_build_oom = str(Path(__file__).parent.resolve() / "podman_build_oom.sh")
         build_command = [
-            "podman",
-            "build",
+            podman_build_oom,  # magic wrapper script for catching OOM events
             "--tag=" + job.name,
             "--file=." + job.spec["dockerfile"],
             *resources,
@@ -366,11 +366,9 @@ def spack_cache_ready() -> bool:
             "podman",
             "--transient-store",  # quick startup
             "run",
-            "docker.io/ubuntu:26.04",
-            "/usr/lib/apt/apt-helper",  # curl is not available in ubuntu base image
-            "download-file",
+            "docker.io/alpine/curl",
+            "-s",
             spack_cache_url,
-            "/tmp/foo",
         ],
         stdout=subprocess.DEVNULL,
     )
