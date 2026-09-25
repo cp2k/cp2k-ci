@@ -632,8 +632,8 @@ def get_dashboard_report_sha(target_name: TargetName) -> Optional[str]:
     # Downloading first 1kb of report should be enough to read CommitSHA.
     blob = output_bucket.get_blob("dashboard_" + test_name + "_report.txt")
     if blob:
-        # We only download the first 1024 bytes which might break a unicode character.
-        report = blob.download_as_string(end=1024).decode("utf8", errors="replace")
+        # We only download the first 100kb which might break a unicode character.
+        report = blob.download_as_string(end=102400).decode("utf8", errors="replace")
         m = re.search(r"(^|\n)CommitSHA: (\w{40})\n", report)
         if m:
             return str(m.group(2))
