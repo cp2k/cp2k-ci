@@ -281,6 +281,10 @@ def process_pull_request_closed(gh: GithubUtil, pr: PullRequest) -> None:
         dev_team = gh.get_team("cp2k-developers")
         gh.post_invitation(pr["user"], dev_team)
 
+    # TODO
+    # Cancel old jobs. Conclusion "skipped" gets ignored when looking at previous runs.
+    # cancel_check_runs(target_pattern="*", gh=gh, pr=pr, sender=sender, set_skipped=True)
+
 
 # ======================================================================================
 def process_issue_comment(

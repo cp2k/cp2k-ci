@@ -188,6 +188,7 @@ class Worker:
         self.report(f"EndState: {end_state}\n")
         self.report(f"EndDate: {now()}\n")
         self.report_fh.close()
+        self.send_heartbeat(job)
         job.upload_report(self.report_path)
         self.set_job_state(job, end_state)
         sys.exit(0)
@@ -268,6 +269,7 @@ class Worker:
         )
         if p.wait() == 0:
             self.report(f"\nUploading artifacts...\n")
+            self.send_heartbeat(job)
             shutil.make_archive(str(artifacts_path), "zip", artifacts_path)
             job.upload_artifacts(artifacts_path.with_suffix(".zip"))
 
