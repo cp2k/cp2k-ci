@@ -4,12 +4,13 @@ CREATE TYPE job_state_enum AS ENUM (
     'RUNNING',
     'CANCELING',
     'CANCELED',
-    'SUCCEEDED',
-    'FAILED',
-    'OUT_OF_MEMORY',
-    'TIMEOUT',
+    'SUCCEEDED', -- deprecated
+    'FAILED', -- deprecated
+    'OUT_OF_MEMORY', -- deprecated
+    'TIMEOUT', -- deprecated
     'PREEMPTED',
     'CI_ERROR',
+    'DONE',
     );
 
 CREATE TABLE jobs (

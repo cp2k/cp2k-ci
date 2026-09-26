@@ -19,18 +19,7 @@ from typing import Any, Dict, TypedDict, IO, List, Literal, Optional
 import requests
 
 # ======================================================================================
-JobState = Literal[
-    "QUEUING",
-    "RUNNING",
-    "CANCELING",
-    "CANCELED",
-    "SUCCEEDED",
-    "FAILED",
-    "OUT_OF_MEMORY",
-    "TIMEOUT",
-    "PREEMPTED",
-    "CI_ERROR",
-]
+JobState = Literal["QUEUING", "RUNNING", "CANCELING", "CANCELED", "CI_ERROR", "DONE"]
 
 
 # ======================================================================================
@@ -180,6 +169,7 @@ class Worker:
         self.report(f"Memory: {self.memory}\n")
         self.report(f"CpuId: {self.num_cpus}x {cpu_id()}\n")
         self.report(f"SpackCache: {"ready" if spack_cache_ready() else "n/a"}\n")
+        job.upload_report(self.report_path)
 
         # Run job
         end_state = self.inner_run(job)
@@ -258,11 +248,11 @@ class Worker:
         if p.returncode == 137:
             self.report("\nSummary: Container build ran out of memory.\n")
             self.report("Status: FAILED\n")
-            return "OUT_OF_MEMORY"
+            return "DONE"
         elif p.returncode != 0:
             self.report("\nSummary: Container build had non-zero exit status.\n")
             self.report("Status: FAILED\n")
-            return "FAILED"
+            return "DONE"
 
         # Create container, so that we can copy files out.
         container = f"{job.name}_cont"
@@ -298,7 +288,7 @@ class Worker:
             shutil.make_archive(str(artifacts_path), "zip", artifacts_path)
             job.upload_artifacts(artifacts_path.with_suffix(".zip"))
 
-        return "SUCCEEDED"
+        return "DONE"
 
     # ----------------------------------------------------------------------------------
     def report(self, text: str) -> None:
@@ -340,11 +330,14 @@ class Worker:
         url = "https://ci.cp2k.org" + path
         headers = {"Authorization": f"Bearer {self.secret}", "X-Worker-Name": self.name}
         while True:
-            r = requests.request(method=method, url=url, headers=headers, json=json)
-            if r.status_code < 500:
+            try:
+                r = requests.request(method=method, url=url, headers=headers, json=json)
+                if r.status_code >= 500:
+                    raise Exception(f"Got status {r.status_code} for {method} {path}")
                 return r
-            print(f"Got status {r.status_code} for {method} {path}")
-            sleep(10)  # retry
+            except Exception as e:
+                print(f"Got {e} - sleeping 10 seconds before trying again...")
+                sleep(10)
 
 
 # ======================================================================================

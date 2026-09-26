@@ -774,7 +774,7 @@ def publish_job_to_github(job: Job) -> None:
     report_blob = output_bucket.blob(job.annotations["cp2kci-report-path"])
     check_run: CheckRun = {"status": status, "output": {}}
     if status == "completed":
-        if job.state == "SUCCEEDED":
+        if job.state == "DONE":
             report = parse_report(report_blob)
             check_run["conclusion"] = "success" if report.status == "OK" else "failure"
             check_run["output"]["title"] = report.summary

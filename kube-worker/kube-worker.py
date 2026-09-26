@@ -124,9 +124,9 @@ def process_active(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) ->
         elif phase == "Running":
             kube_states[jobname] = "RUNNING"
         elif phase == "Succeeded":
-            kube_states[jobname] = "SUCCEEDED"
+            kube_states[jobname] = "DONE"
         elif phase == "Failed":
-            kube_states[jobname] = "FAILED"
+            kube_states[jobname] = "CI_ERROR"
         else:  # Unknown
             kube_states[jobname] = "QUEUING"
 
@@ -172,8 +172,8 @@ def process_active(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) ->
     # Remove successful pods, others will get garbage collected by kubernetes eventually.
     # https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-garbage-collection
     for jobname, state in kube_states.items():
-        if state == "SUCCEEDED":
-            print(f"Removing pod of successful job {jobname}.")
+        if state == "DONE":
+            print(f"Removing pod of done job {jobname}.")
             delete_pod(kube, jobname)
 
 

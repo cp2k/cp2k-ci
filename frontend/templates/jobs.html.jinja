@@ -11,7 +11,6 @@
             <th>offloadable</th>
             <th>node pool</th>
             <th>worker</th>
-            <th>heartbeat</th>
             <th>created</th>
             <th>started</th>
             <th>finished</th>
@@ -30,7 +29,6 @@
             <td>{{ job["offloadable"] }}</td>
             <td>{{ job["nodepool"] }}</td>
             <td>{{ job["worker"] }}</td>
-            <td>{{ job["heartbeat"] and job["heartbeat"].isoformat(sep=' ')[:16] }}</td>
             <td>{{ job["created"].isoformat(sep=' ')[:16] }}</td>
             <td>{{ job["started"] and job["started"].isoformat(sep=' ')[:16] }}</td>
             <td>{{ job["finished"] and job["finished"].isoformat(sep=' ')[:16] }}</td>
