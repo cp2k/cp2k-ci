@@ -244,6 +244,7 @@ class Worker:
                 except subprocess.TimeoutExpired:
                     pass
         build_duration = time() - build_start
+        self.report(f"Container build took {build_duration:.0f} seconds.\n")
 
         if p.returncode == 137:
             self.report("\nSummary: Container build ran out of memory.\n")
