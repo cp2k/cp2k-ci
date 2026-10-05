@@ -11,7 +11,7 @@ import shutil
 import tomllib
 import argparse
 import subprocess
-from time import sleep, time
+from time import sleep, perf_counter
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any, Dict, TypedDict, IO, List, Literal, Optional
@@ -74,11 +74,9 @@ def main() -> None:
             print(f"{len(workers) - len(idle_workers)} / {len(workers)} workers busy")
             prev_num_idle_workers = len(idle_workers)
 
-            # Remove old intermediate containers when all workers are idle.
+            # Free disk space when all workers are idle.
             if len(idle_workers) == len(workers):
-                subprocess.run(["buildah", "rm", "--all"])
-                for w in workers:
-                    shutil.rmtree(w.tmpdir, ignore_errors=True)
+                collect_garbage(workers)
 
         if idle_workers:  # ask for new job
             # Use dict instead of set to preserve the order of nodepools
@@ -156,9 +154,6 @@ class Worker:
         # Ready environment
         self.tmpdir.mkdir(exist_ok=True)
         os.environ["TMPDIR"] = str(self.tmpdir)
-        spack_cache_remove_old_than(days=30)
-        subprocess.run(["podman", "container", "prune", "-f", "--filter=until=24h"])
-        subprocess.run(["podman", "image", "prune", "-a", "-f", "--filter=until=24h"])
 
         # Preamble
         self.report_path.unlink(missing_ok=True)
@@ -189,17 +184,20 @@ class Worker:
         # Fetch git branch.
         p = self.popen(["git", "fetch", "origin", job.spec["git_branch"]], report=False)
         if p.wait() != 0:
+            print(f"git fetch returned {p.returncode}")
             return "CI_ERROR"
 
         # Checkout git commit.
         p = self.popen(["git", "checkout", job.spec["git_ref"]], report=False)
         if p.wait() != 0:
+            print(f"git checkout returned {p.returncode}")
             return "CI_ERROR"
 
         # Report git commit metadata.
         git_log_format = "--pretty=%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: %an%nCommitSubject: %s%n"
         p = self.popen(["git", "--no-pager", "log", "-1", git_log_format])
         if p.wait() != 0:
+            print(f"git log returned {p.returncode}")
             return "CI_ERROR"
 
         resources = [
@@ -223,7 +221,7 @@ class Worker:
         build_command.append("." + job.spec["build_path"])
 
         # Build container.
-        build_start = time()
+        build_start = perf_counter()
         p = self.popen(build_command)
         while p.poll() is None:
             self.send_heartbeat(job)
@@ -243,7 +241,7 @@ class Worker:
                     p.wait(timeout=30)
                 except subprocess.TimeoutExpired:
                     pass
-        build_duration = time() - build_start
+        build_duration = perf_counter() - build_start
         self.report(f"Container build took {build_duration:.0f} seconds.\n")
 
         if p.returncode == 137:
@@ -261,6 +259,7 @@ class Worker:
             ["podman", "create", f"--name={container}", job.name], report=False
         )
         if p.wait() != 0:
+            print(f"podman create returned {p.returncode}")
             return "CI_ERROR"
 
         # Output report from container if build went really quick, ie. was fully cached.
@@ -337,7 +336,7 @@ class Worker:
                     raise Exception(f"Got status {r.status_code} for {method} {path}")
                 return r
             except Exception as e:
-                print(f"Got {e} - sleeping 10 seconds before trying again...")
+                print(f"{e} - sleeping 10 seconds before trying again...")
                 sleep(10)
 
 
@@ -454,6 +453,18 @@ def spack_cache_remove_old_than(days: int) -> None:
 # ======================================================================================
 def spack_cache_exec(args: List[str]) -> None:
     subprocess.run(["podman", "exec", "spack-cache", *args], check=True)
+
+
+# ======================================================================================
+def collect_garbage(workers: List[Worker]) -> None:
+    print("Collecting garbage...")
+    spack_cache_remove_old_than(days=30)
+    subprocess.run(["buildah", "rm", "--all"])
+    subprocess.run(["podman", "container", "prune", "-f", "--filter=until=24h"])
+    subprocess.run(["podman", "image", "prune", "-a", "-f", "--filter=until=24h"])
+    for w in workers:
+        shutil.rmtree(w.tmpdir, ignore_errors=True)
+    print("Garbage collection done.")
 
 
 # ======================================================================================
