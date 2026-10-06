@@ -184,20 +184,20 @@ class Worker:
         # Fetch git branch.
         p = self.popen(["git", "fetch", "origin", job.spec["git_branch"]], report=False)
         if p.wait() != 0:
-            print(f"git fetch returned {p.returncode}")
+            self.report(f"git fetch exited with code {p.returncode}")
             return "CI_ERROR"
 
         # Checkout git commit.
         p = self.popen(["git", "checkout", job.spec["git_ref"]], report=False)
         if p.wait() != 0:
-            print(f"git checkout returned {p.returncode}")
+            self.report(f"git checkout exited with code {p.returncode}")
             return "CI_ERROR"
 
         # Report git commit metadata.
         git_log_format = "--pretty=%nCommitSHA: %H%nCommitTime: %ci%nCommitAuthor: %an%nCommitSubject: %s%n"
         p = self.popen(["git", "--no-pager", "log", "-1", git_log_format])
         if p.wait() != 0:
-            print(f"git log returned {p.returncode}")
+            self.report(f"git log exited with code {p.returncode}")
             return "CI_ERROR"
 
         resources = [
@@ -259,7 +259,7 @@ class Worker:
             ["podman", "create", f"--name={container}", job.name], report=False
         )
         if p.wait() != 0:
-            print(f"podman create returned {p.returncode}")
+            self.report(f"podman create exited with code {p.returncode}")
             return "CI_ERROR"
 
         # Output report from container if build went really quick, ie. was fully cached.
