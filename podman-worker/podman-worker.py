@@ -243,12 +243,15 @@ class Worker:
                     pass
         build_duration = perf_counter() - build_start
         self.report(f"Container build took {build_duration:.0f} seconds.\n")
+        partial_report = self.report_path.read_text()
 
         if p.returncode == 137:
             self.report("\nSummary: Container build ran out of memory.\n")
             self.report("Status: FAILED\n")
             return "DONE"
-        elif p.returncode != 0:
+
+        # Write generic failure message when a more helpful one was not produced.
+        elif p.returncode != 0 and "\nStatus: FAILED" not in partial_report:
             self.report("\nSummary: Container build had non-zero exit status.\n")
             self.report("Status: FAILED\n")
             return "DONE"
@@ -262,18 +265,19 @@ class Worker:
             self.report(f"podman create exited with code {p.returncode}")
             return "CI_ERROR"
 
-        # Output report from container if build went really quick, ie. was fully cached.
-        if build_duration < 20:
+        # Replay report from container when build appears to have been fully cached.
+        if "\nStatus:" not in partial_report:
             container_report_path = self.workdir / "container_report.log"
             p = self.popen(
                 ["podman", "cp", f"{container}:report.log", f"{container_report_path}"],
                 report=False,
             )
             if p.wait() == 0:
-                self.report("\nReplaying report from container:\n\n")
                 txt = container_report_path.read_text()
                 txt = re.sub(r"^(Summary:.*)$", r"\1 (cached)", txt, flags=re.MULTILINE)
-                self.report(txt)
+                if "\nStatus:" in txt:
+                    self.report("\nReplaying report from container:\n\n")
+                    self.report(txt)
 
         # Upload artifacts.
         artifacts_path = self.workdir / "artifacts"
