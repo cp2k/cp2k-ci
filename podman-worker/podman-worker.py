@@ -250,10 +250,11 @@ class Worker:
             self.report("Status: FAILED\n")
             return "DONE"
 
-        # Write generic failure message when a more helpful one was not produced.
-        elif p.returncode != 0 and "\nStatus: FAILED" not in partial_report:
-            self.report("\nSummary: Container build had non-zero exit status.\n")
-            self.report("Status: FAILED\n")
+        elif p.returncode != 0:
+            # Write generic failure message only when a more helpful one was not produced.
+            if "\nStatus: FAILED" not in partial_report:
+                self.report("\nSummary: Container build had non-zero exit status.\n")
+                self.report("Status: FAILED\n")
             return "DONE"
 
         # Create container, so that we can copy files out.
@@ -412,6 +413,7 @@ def spack_cache_start() -> None:
                 "podman",
                 "run",
                 "--name=spack-cache",
+                "--replace",
                 "--detach",
                 "-p",
                 "9000:9000",
