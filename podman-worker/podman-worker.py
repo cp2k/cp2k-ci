@@ -466,7 +466,7 @@ def collect_garbage(workers: List[Worker]) -> None:
     print("Collecting garbage...")
     spack_cache_remove_old_than(days=30)
     subprocess.run(["buildah", "rm", "--all"])
-    subprocess.run(["podman", "container", "prune", "-f", "--filter=until=24h"])
+    subprocess.run(["podman", "container", "prune", "-f"])  # free up locks, limit 2048
     subprocess.run(["podman", "image", "prune", "-a", "-f", "--filter=until=24h"])
     for w in workers:
         shutil.rmtree(w.tmpdir, ignore_errors=True)
