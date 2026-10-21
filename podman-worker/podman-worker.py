@@ -66,6 +66,7 @@ def main() -> None:
 
     spack_cache_start()
     prev_num_idle_workers = -1
+    last_garbage_collection = "n/a"
 
     # Main loop.
     while True:
@@ -77,6 +78,7 @@ def main() -> None:
             # Free disk space when all workers are idle.
             if len(idle_workers) == len(workers):
                 collect_garbage(workers)
+                last_garbage_collection = now()
 
         if idle_workers:  # ask for new job
             # Use dict instead of set to preserve the order of nodepools
@@ -86,6 +88,7 @@ def main() -> None:
                 "POST", "/api/jobs", json={"idle_nodepools": list(idle_nodepools)}
             )
             if r.status_code == 200:
+                print(f"Last garbage collection: {last_garbage_collection}")
                 payload = r.json()
                 job = Job(name=payload["name"], spec=payload["spec"])
                 idle_workers[0].run(job)
@@ -111,7 +114,7 @@ class Job:
     # ----------------------------------------------------------------------------------
     def upload_file(self, local_file: Path, url: str, content_type: str) -> None:
         headers = {"cache-control": "no-cache", "content-type": content_type}
-        requests.put(url, data=local_file.read_bytes(), headers=headers)
+        requests.put(url, data=local_file.read_bytes(), headers=headers, timeout=60)
 
 
 # ======================================================================================
@@ -336,8 +339,10 @@ class Worker:
         headers = {"Authorization": f"Bearer {self.secret}", "X-Worker-Name": self.name}
         while True:
             try:
-                r = requests.request(method=method, url=url, headers=headers, json=json)
-                if r.status_code >= 500:
+                r = requests.request(
+                    method=method, url=url, headers=headers, json=json, timeout=10
+                )
+                if r.status_code >= 400:
                     raise Exception(f"Got status {r.status_code} for {method} {path}")
                 return r
             except Exception as e:
@@ -463,14 +468,15 @@ def spack_cache_exec(args: List[str]) -> None:
 
 # ======================================================================================
 def collect_garbage(workers: List[Worker]) -> None:
-    print("Collecting garbage...")
+    print("\nCollecting garbage...")
     spack_cache_remove_old_than(days=30)
     subprocess.run(["buildah", "rm", "--all"])
     subprocess.run(["podman", "container", "prune", "-f"])  # free up locks, limit 2048
     subprocess.run(["podman", "image", "prune", "-a", "-f", "--filter=until=24h"])
+    subprocess.run(["podman", "system", "renumber"])  # seems to help with locks too
     for w in workers:
         shutil.rmtree(w.tmpdir, ignore_errors=True)
-    print("Garbage collection done.")
+    print("Garbage collection done.\n")
 
 
 # ======================================================================================
