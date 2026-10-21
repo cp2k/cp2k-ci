@@ -14,7 +14,7 @@ import subprocess
 from time import sleep, perf_counter
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Any, Dict, TypedDict, IO, List, Literal, Optional
+from typing import Any, Dict, Tuple, TypedDict, IO, List, Literal, Optional
 
 import requests
 
@@ -81,17 +81,17 @@ def main() -> None:
                 last_garbage_collection = now()
 
         if idle_workers:  # ask for new job
-            # Use dict instead of set to preserve the order of nodepools
-            # to ensure that jobs for rare nodepools are allocated first.
-            idle_nodepools = {np: None for w in idle_workers for np in w.nodepools}
-            r = idle_workers[0].api_request(
-                "POST", "/api/jobs", json={"idle_nodepools": list(idle_nodepools)}
-            )
-            if r.status_code == 200:
-                print(f"Last garbage collection: {last_garbage_collection}")
-                payload = r.json()
-                job = Job(name=payload["name"], spec=payload["spec"])
-                idle_workers[0].run(job)
+            for nodepools in {w.nodepools for w in idle_workers}:
+                idle_worker = next(w for w in idle_workers if w.nodepools == nodepools)
+                # New jobs get assigned to the worker that makes the POST request.
+                r = idle_worker.api_request(
+                    "POST", "/api/jobs", json={"idle_nodepools": nodepools}
+                )
+                if r.status_code == 200:
+                    print(f"Last garbage collection: {last_garbage_collection}")
+                    payload = r.json()
+                    job = Job(name=payload["name"], spec=payload["spec"])
+                    idle_worker.run(job)
 
         sleep(5)
 
@@ -125,7 +125,9 @@ class Worker:
         self.memory: str = config["memory"]
         self.cpuset: str = config["cpuset"]
         self.num_cpus = cpuset_size(self.cpuset)
-        self.nodepools: List[str] = config["nodepools"]
+        self.gpuset: str | None = config.get("gpuset")
+        self.gpu_ids = gpu_ids(self.gpuset) if self.gpuset else []
+        self.nodepools: Tuple[str] = tuple(config["nodepools"])
         self.workdir = Path(config["workdir"])
         assert (self.workdir / "cp2k" / "make_cp2k.sh").exists()
         self.tmpdir = self.workdir / "tmp"
@@ -145,6 +147,8 @@ class Worker:
 
     # ----------------------------------------------------------------------------------
     def run(self, job: Job) -> None:
+        assert job.spec["nodepool"] in self.nodepools
+
         # Fork
         sys.stdout.flush()
         sys.stderr.flush()
@@ -166,6 +170,8 @@ class Worker:
         self.report(f"Worker: {self.name}\n")
         self.report(f"Memory: {self.memory}\n")
         self.report(f"CpuId: {self.num_cpus}x {cpu_id()}\n")
+        if self.gpu_ids:
+            self.report(f"GpuId: {len(self.gpu_ids)}x {self.gpu_ids[0]}\n")
         self.report(f"SpackCache: {"ready" if spack_cache_ready() else "n/a"}\n")
         job.upload_report(self.report_path)
 
@@ -203,20 +209,18 @@ class Worker:
             self.report(f"git log exited with code {p.returncode}")
             return "CI_ERROR"
 
-        resources = [
-            "--shm-size=1g",
-            f"--memory={self.memory}",
-            f"--cpuset-cpus={self.cpuset}",
-            f"--env=PYTHON_CPU_COUNT={self.num_cpus}",
-        ]
-
         podman_build_oom = str(Path(__file__).parent.resolve() / "podman_build_oom.sh")
         build_command = [
             podman_build_oom,  # magic wrapper script for catching OOM events
             "--tag=" + job.name,
             "--file=." + job.spec["dockerfile"],
-            *resources,
+            "--shm-size=1g",
+            f"--memory={self.memory}",
+            f"--cpuset-cpus={self.cpuset}",
+            f"--env=PYTHON_CPU_COUNT={self.num_cpus}",
         ]
+        if self.gpuset:
+            build_command.append(f"--device={self.gpuset}")
         for arg in job.spec["build_args"].strip().split():
             build_command.append(f"--build-arg={arg}")
         if not job.spec["use_cache"]:
@@ -325,7 +329,7 @@ class Worker:
 
     # ----------------------------------------------------------------------------------
     def set_job_state(self, job: Job, state: JobState) -> None:
-        print(f"Setting state of {job.name} to {state}.")
+        print(f"{self.name}: Setting state of {job.name} to {state}.")
         self.api_request("PATCH", f"/api/jobs/{job.name}", json={"state": state})
 
     # ----------------------------------------------------------------------------------
@@ -342,8 +346,10 @@ class Worker:
                 r = requests.request(
                     method=method, url=url, headers=headers, json=json, timeout=10
                 )
-                if r.status_code >= 400:
+                if r.status_code >= 500:
                     raise Exception(f"Got status {r.status_code} for {method} {path}")
+                if r.status_code >= 400:
+                    print(f"Got status {r.status_code} for {method} {path}")
                 return r
             except Exception as e:
                 print(f"{e} - sleeping 10 seconds before trying again...")
@@ -371,6 +377,25 @@ def cpuset_size(cpuset: str) -> int:
         capture_output=True,
     )
     return int(p.stdout)
+
+
+# ======================================================================================
+def gpu_ids(gpuset: str) -> List[str]:
+    p = subprocess.run(
+        [
+            "podman",
+            "--transient-store",  # quick startup
+            "run",
+            f"--device={gpuset}",
+            "docker.io/nvidia/cuda:13.4.3-base-ubuntu26.04",
+            "nvidia-smi",
+            "--query-gpu=gpu_name",
+            "--format=csv,noheader",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    return p.stdout.decode("utf8").strip().split("\n")
 
 
 # ======================================================================================
