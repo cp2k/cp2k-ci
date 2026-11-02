@@ -12,6 +12,7 @@ import mimetypes
 import fsspec  # type: ignore
 from zipfile import ZipFile
 from typing import Any, AsyncGenerator
+from datetime import datetime, timezone, timedelta
 
 import jinja2
 import psycopg
@@ -122,8 +123,23 @@ async def handle_jobs_dashboard(request: web.Request) -> web.Response:
                 ORDER BY finished DESC, created DESC""")
             jobs = await cur.fetchall()
 
+    for job in jobs:
+        job["age"] = format_duration(datetime.now(timezone.utc) - job["created"])
+        if job["finished"]:
+            job["duration"] = format_duration(job["finished"] - job["created"])
     html = tmpl.render(jobs=jobs)
     return web.Response(text=html, content_type="text/html")
+
+
+# ======================================================================================
+def format_duration(duration: timedelta) -> str:
+    secs = duration.total_seconds()
+    if secs < 60:
+        return f"{secs:.0f} s"
+    elif secs < 3600:
+        return f"{secs/60:.0f} min"
+    else:
+        return f"{secs/3600:.1f} h"
 
 
 # ======================================================================================
