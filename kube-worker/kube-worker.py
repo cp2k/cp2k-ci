@@ -74,7 +74,7 @@ def process_new(db: psycopg.Connection, kube: kubernetes.client.CoreV1Api) -> No
                 # TODO find a smarter criterion that looks at the queue lenght.
                 cur.execute(
                     """SELECT name, spec, annotations FROM jobs WHERE state='NEW'
-                    AND nodepool IN ('pool-main', 'pool-arm')
+                    AND nodepool IN ('pool-main', 'pool-arm', 'default-pool')
                     AND (NOT offloadable
                         OR (priority     AND (age(now(), created) > INTERVAL '15 minutes'))
                         OR (NOT priority AND (age(now(), created) > INTERVAL '6 hours'))

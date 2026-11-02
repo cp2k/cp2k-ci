@@ -133,7 +133,7 @@ async def handle_jobs_dashboard(request: web.Request) -> web.Response:
 
 # ======================================================================================
 def format_duration(duration: timedelta) -> str:
-    secs = duration.total_seconds()
+    secs = int(duration.total_seconds())
     if secs < 60:
         return f"{secs:.0f} s"
     elif secs < 3600:
