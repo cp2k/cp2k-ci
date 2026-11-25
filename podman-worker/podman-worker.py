@@ -172,6 +172,7 @@ class Worker:
         self.report(f"CpuId: {self.num_cpus}x {cpu_id()}\n")
         if self.gpu_ids:
             self.report(f"GpuId: {len(self.gpu_ids)}x {self.gpu_ids[0]}\n")
+            self.report(f"CudaMps: {"ready" if cuda_mps_ready() else "n/a"}\n")
         self.report(f"SpackCache: {"ready" if spack_cache_ready() else "n/a"}\n")
         job.upload_report(self.report_path)
 
@@ -403,6 +404,17 @@ def gpu_ids(gpuset: str) -> List[str]:
         capture_output=True,
     )
     return p.stdout.decode("utf8").strip().split("\n")
+
+
+# ======================================================================================
+def cuda_mps_ready() -> bool:
+    try:
+        p = subprocess.run(
+            ["nvidia-cuda-mps-control"], input="get_server_list\n", text=True
+        )
+        return p.returncode == 0
+    except:
+        return False
 
 
 # ======================================================================================
